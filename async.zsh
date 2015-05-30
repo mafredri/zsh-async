@@ -102,9 +102,9 @@ async_process_results() {
 	# Read output from zpty and parse it if available
 	while zpty -rt "$worker" line 2>/dev/null; do
 		# Remove unwanted \r from output
-		ASYNC_PROCESS_BUFFER[$1]+=${line//$'\r'$'\n'/$'\n'}
+		ASYNC_PROCESS_BUFFER[$worker]+=${line//$'\r'$'\n'/$'\n'}
 		# Split buffer on null characters, preserve empty elements
-		items=("${(@)=ASYNC_PROCESS_BUFFER[$1]}")
+		items=("${(@)=ASYNC_PROCESS_BUFFER[$worker]}")
 		# Remove last element since it's due to the return string separator structure
 		items=("${(@)items[1,${#items}-1]}")
 
@@ -119,7 +119,7 @@ async_process_results() {
 		done
 
 		# Empty the buffer
-		ASYNC_PROCESS_BUFFER[$1]=""
+		ASYNC_PROCESS_BUFFER[$worker]=""
 	done
 
 	# If we processed any results, return success
@@ -196,7 +196,7 @@ async_flush_jobs() {
 
 	# Clear any partial buffers
 	typeset -gA ASYNC_PROCESS_BUFFER
-	ASYNC_PROCESS_BUFFER[$1]=""
+	ASYNC_PROCESS_BUFFER[$worker]=""
 }
 
 #
