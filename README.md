@@ -163,9 +163,9 @@ when work is complete~~
 
 I found a great theme for zsh, [Pure](https://github.com/sindresorhus/pure) by
 Sindre Sorhus. After using it for a while I noticed some graphical glitches
-du to the terminal being updated by a disowned process. Hes work, however,
-inspired me to get my hands dirty and find a solution. I tried many thing,
-coprocesses were one, but they confused me and I didn't like them. I also
-ventured down the rabbit-hole of sending and trapping kill-signals, but I
-could not manage to fix the deadlock issues related to it. Finally I came up
-with this and thought, hey, why not make it a library.
+due to the terminal being updated by a disowned process. Thus, I became inspired
+to get my hands dirty and find a solution. I tried many things, coprocesses
+(seemed too limited by themselves), different combinations of trapping
+kill-signals, etc. I also had problems with the zsh process ending up in a
+deadlock due to some zsh bug. After working out the kinks, I ended up with this
+and thought, hey, why not make it a library.
