@@ -5,7 +5,7 @@
 
 ## Intro (TL;DR)
 
-With `zsh-async` you can run multiple asynchonous jobs, enforce unique jobs
+With `zsh-async` you can run multiple asynchronous jobs, enforce unique jobs
 (multiple instances of the same job will not run), flush all currently running
 jobs and create multiple workers (each with their own jobs). For each worker
 you can register a callback-function through which you will be notified about
@@ -13,16 +13,16 @@ the job results (job name, return code, output and execution time).
 
 ## Overview
 
-`zsh-async` is a small library for running asynchornous tasks in zsh without
+`zsh-async` is a small library for running asynchronous tasks in zsh without
 requiring any external tools. It utilizes `zsh/zpty` to launch a pseudo-terminal
 in which all commands get executed without blocking any other processes.
 Checking for completed tasks can be done manually, by polling, or better yet,
-automatically whenever a process has finnished executing by notifying through a
+automatically whenever a process has finished executing by notifying through a
 `SIGWINCH` kill-signal.
 
 This library bridges the gap between spawning child processes and disowning
-them. Child proccesses launched by normal means clutter the terminal with
-output about their state, and disowned proccesses become separate entities, no
+them. Child processes launched by normal means clutter the terminal with
+output about their state, and disowned processes become separate entities, no
 longer under control of the parent. Now you can have both!
 
 ## Usage
@@ -64,7 +64,7 @@ running.
 
 #### `async_process_results <worker_name> <callback_function>`
 
-Get results from finnished jobs and pass it to the to callback function. This
+Get results from finished jobs and pass it to the to callback function. This
 is the only way to reliably return the job name, return code, output and
 execution time and with minimal effort.
 
