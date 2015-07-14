@@ -34,6 +34,10 @@ _async_job() {
 	# Calculate duration
 	duration=$(( $EPOCHREALTIME - $duration ))
 
+	# stip all null-characters from stdout and stderr
+	stdout="${stdout//$'\0'/}"
+	stderr="${stderr//$'\0'/}"
+
 	# Grab mutex lock
 	read -ep >/dev/null
 

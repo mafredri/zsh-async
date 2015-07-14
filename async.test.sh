@@ -17,6 +17,12 @@ error_echo() {
 	exit 100
 }
 
+null_echo() {
+	echo Hello$'\0' with$'\0' nulls!
+	echo "Did we catch them all?"$'\0'
+	echo $'\0'"What about the errors?"$'\0' 1>&2
+}
+
 simple_result() {
 	print
 	print -l -- $1: $3
@@ -44,6 +50,7 @@ async_start_worker async2 unique
 async_job async2 git_status
 async_job async2 git_status
 async_job async2 error_echo
+async_job async2 null_echo
 sleep 0.2
 # Only results for first git status
 async_process_results async2 result
