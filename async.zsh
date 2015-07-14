@@ -10,8 +10,8 @@
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
-	# Store start time
-	local duration=$EPOCHREALTIME
+	# Store start time as double precision (+E disables scientific notation)
+	float +E duration=$EPOCHREALTIME
 
 	# Run the command
 	#
@@ -32,7 +32,7 @@ _async_job() {
 	)"
 
 	# Calculate duration
-	duration=$(( $EPOCHREALTIME - $duration ))
+	duration=$(( EPOCHREALTIME - duration ))
 
 	# stip all null-characters from stdout and stderr
 	stdout="${stdout//$'\0'/}"
@@ -42,7 +42,7 @@ _async_job() {
 	read -ep >/dev/null
 
 	# return output (<job_name> <return_code> <stdout> <duration> <stderr>)
-	print -r -N -n -- "$1" "$ret" "$stdout" $duration "$stderr"$'\0'
+	print -r -N -n -- "$1" "$ret" "$stdout" "$duration" "$stderr"$'\0'
 
 	# Unlock mutex
 	print -p "t"
