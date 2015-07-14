@@ -14,7 +14,7 @@ error_echo() {
 	echo "I will print some errors, yay!"
 	1234
 	4321
-	return 666
+	exit 100
 }
 
 simple_result() {
