@@ -14,8 +14,22 @@ _async_job() {
 	local duration=$EPOCHREALTIME
 
 	# Run the command
-	typeset stdout stderr ret
-	stdout=$(eval "$@") ret=$? 2>&1 | read stderr
+	#
+	# What is happening here is that we are assigning stdout, stderr and ret to
+	# variables, and then we are printing out the variable assignment through
+	# typeset -p. This way when we run eval we get something along the lines of:
+	# 	eval "
+	# 		typeset stdout=' M async.test.sh\n M async.zsh'
+	# 		typeset stderr=''
+	# 		typeset ret=0
+	# 	"
+	unset stdout stderr ret
+	eval "$(
+		( eval "$@" ) \
+			> >(stdout=$(cat); typeset -p stdout) \
+			2> >(stderr=$(cat); typeset -p stderr)
+		ret=$?; typeset -p ret
+	)"
 
 	# Calculate duration
 	duration=$(( $EPOCHREALTIME - $duration ))

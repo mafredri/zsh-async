@@ -13,6 +13,7 @@ git_status() {
 error_echo() {
 	echo "I will print some errors, yay!"
 	1234
+	4321
 	return 666
 }
 
