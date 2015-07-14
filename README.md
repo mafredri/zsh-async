@@ -74,6 +74,7 @@ The `callback_function` is called with the following parameters:
 * `$2` return code
 * `$3` resulting (stdout) output from job execution
 * `$4` execution time, floating point e.g. 0.30631208419799805 seconds
+* `$5` resulting (stderr) error output from job execution
 
 #### `async_register_callback <worker_name> <callback_function>`
 

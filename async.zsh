@@ -14,9 +14,8 @@ _async_job() {
 	local duration=$EPOCHREALTIME
 
 	# Run the command
-	local out
-	out=$(eval "$@" 2>&1)
-	local ret=$?
+	typeset stdout stderr ret
+	stdout=$(eval "$@") ret=$? 2>&1 | read stderr
 
 	# Calculate duration
 	duration=$(( $EPOCHREALTIME - $duration ))
@@ -24,8 +23,8 @@ _async_job() {
 	# Grab mutex lock
 	read -ep >/dev/null
 
-	# return output (<job_name> <return_code> <output> <duration>)
-	print -r -N -n -- "$1" "$ret" "$out" $duration$'\0'
+	# return output (<job_name> <return_code> <stdout> <duration> <stderr>)
+	print -r -N -n -- "$1" "$ret" "$stdout" $duration "$stderr"$'\0'
 
 	# Unlock mutex
 	print -p "t"
@@ -91,8 +90,9 @@ _async_worker() {
 # callback_function is called with the following parameters:
 # 	$1 = job name, e.g. the function passed to async_job
 # 	$2 = return code
-# 	$3 = resulting output from execution
+# 	$3 = resulting stdout from execution
 # 	$4 = execution time, floating point e.g. 2.05 seconds
+# 	$5 = resulting stderr from execution
 #
 async_process_results() {
 	integer count=0
@@ -112,12 +112,12 @@ async_process_results() {
 		items=("${(@)items[1,${#items}-1]}")
 
 		# Continue until we receive all information
-		(( ${#items} % 4 )) && continue
+		(( ${#items} % 5 )) && continue
 
 		# Work through all results
 		while (( ${#items} > 0 )); do
-			"$callback" "${(@)=items[1,4]}"
-			shift 4 items
+			"$callback" "${(@)=items[1,5]}"
+			shift 5 items
 			count+=1
 		done
 

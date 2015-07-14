@@ -10,6 +10,12 @@ git_status() {
 	git status --porcelain
 }
 
+error_echo() {
+	echo "I will print some errors, yay!"
+	1234
+	return 666
+}
+
 simple_result() {
 	print
 	print -l -- $1: $3
@@ -17,7 +23,7 @@ simple_result() {
 
 result() {
 	print
-	print -l -r -- "Compelted job: '$1'" "Return code: $2" "Duration: $4 seconds" "Output: '${3//$'\n'/\n}'"
+	print -l -r -- "Compelted job: '$1'" "Return code: $2" "Duration: $4 seconds" "Stdout: '${3//$'\n'/\n}'" "Stderr: '${5//$'\n'/\n}'"
 }
 
 
@@ -36,6 +42,7 @@ async_start_worker async2 unique
 # The second cannot run due to unique constraint.
 async_job async2 git_status
 async_job async2 git_status
+async_job async2 error_echo
 sleep 0.2
 # Only results for first git status
 async_process_results async2 result
