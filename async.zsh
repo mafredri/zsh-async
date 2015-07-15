@@ -11,7 +11,7 @@
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
 	# Store start time as double precision (+E disables scientific notation)
-	float +E duration=$EPOCHREALTIME
+	float -F duration=$EPOCHREALTIME
 
 	# Run the command
 	#
