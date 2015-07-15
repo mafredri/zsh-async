@@ -20,15 +20,16 @@ _async_job() {
 	# typeset -p. This way when we run eval we get something along the lines of:
 	# 	eval "
 	# 		typeset stdout=' M async.test.sh\n M async.zsh'
-	# 		typeset stderr=''
 	# 		typeset ret=0
+	# 		typeset stderr=''
 	# 	"
 	unset stdout stderr ret
 	eval "$(
-		( eval "$@" ) \
-			> >(stdout=$(cat); typeset -p stdout) \
-			2> >(stderr=$(cat); typeset -p stderr)
-		ret=$?; typeset -p ret
+		{
+			stdout=$(eval "$@")
+			ret=$?
+			typeset -p stdout ret
+		} 2> >(stderr=$(cat); typeset -p stderr)
 	)"
 
 	# Calculate duration
