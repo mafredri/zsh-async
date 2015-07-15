@@ -15,7 +15,8 @@ error_echo() {
 	print "I will print some errors, yay!"
 	1234
 	4321
-	exit 100
+	print "\"Bye'!!"
+	exit 99
 }
 
 null_echo() {
