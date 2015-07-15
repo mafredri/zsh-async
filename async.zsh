@@ -39,6 +39,10 @@ _async_job() {
 	stdout="${stdout//$'\0'/}"
 	stderr="${stderr//$'\0'/}"
 
+	# if ret is missing for some unknown reason, set it to -1 to indicate we
+	# have run into a bug
+	ret=${ret:--1}
+
 	# Grab mutex lock
 	read -ep >/dev/null
 

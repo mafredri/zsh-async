@@ -72,6 +72,10 @@ The `callback_function` is called with the following parameters:
 
 * `$1` job name, e.g. the function passed to async_job
 * `$2` return code
+	* Returns `-1` if return code is missing, this should never happen, if it
+	you have likely run into a bug. Please open a new
+	[issue](https://github.com/mafredri/zsh-async/issues/new) with a detailed
+	description of what you were doing.
 * `$3` resulting (stdout) output from job execution
 * `$4` execution time, floating point e.g. 0.0076138973 seconds
 * `$5` resulting (stderr) error output from job execution
