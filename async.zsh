@@ -3,7 +3,7 @@
 #
 # zsh-async
 #
-# version: 0.2.3
+# version: 1.0.0
 # author: Mathias Fredriksson
 # url: https://github.com/mafredri/zsh-async
 #
