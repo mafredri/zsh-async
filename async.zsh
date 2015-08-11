@@ -291,6 +291,7 @@ async_stop_worker() {
 		for k v in ${(@kv)ASYNC_PTYS}; do
 			if [[ $v == $worker ]]; then
 				zle -F $k
+				unset "ASYNC_PTYS[$k]"
 			fi
 		done
 		async_unregister_callback $worker
