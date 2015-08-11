@@ -162,6 +162,14 @@ async_process_results() {
 	return 1
 }
 
+# Watch worker for output
+_async_zle_watcher() {
+	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
+	local worker=$ASYNC_PTYS[$1]
+
+	async_process_results $worker $ASYNC_CALLBACKS[$worker]
+}
+
 #
 # Start a new asynchronous job on specified worker, assumes the worker is running.
 #
@@ -256,7 +264,16 @@ async_start_worker() {
 	setopt localoptions noshwordsplit
 
 	local worker=$1; shift
-	zpty -t $worker &>/dev/null || zpty -b $worker "_async_worker" -p $$ $@ || async_stop_worker $worker
+	zpty -t $worker &>/dev/null && return
+
+	typeset -gA ASYNC_PTYS
+	zpty -b $worker _async_worker -p $$ $@ || {
+		async_stop_worker $worker
+		return 1
+	}
+	ASYNC_PTYS[$REPLY]=$worker
+
+	zle -F $REPLY _async_zle_watcher
 }
 
 #
@@ -270,6 +287,12 @@ async_stop_worker() {
 
 	local ret=0
 	for worker in $@; do
+		# Find and unregister the zle handler for the worker
+		for k v in ${(@kv)ASYNC_PTYS}; do
+			if [[ $v == $worker ]]; then
+				zle -F $k
+			fi
+		done
 		async_unregister_callback $worker
 		zpty -d $worker 2>/dev/null || ret=$?
 	done
