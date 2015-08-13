@@ -212,7 +212,7 @@ async_register_callback() {
 
 	ASYNC_CALLBACKS[$worker]="$*"
 
-	if (( ! ASYNC_DISABLE_KILL )); then
+	if (( ! ASYNC_USE_ZLE_HANDLER )); then
 		trap '_async_notify_trap' WINCH
 	fi
 }
@@ -280,7 +280,7 @@ async_start_worker() {
 		return 1
 	}
 
-	if (( REPLY )); then
+	if (( ASYNC_USE_ZLE_HANDLER )); then
 		ASYNC_PTYS[$REPLY]=$worker
 		zle -F $REPLY _async_zle_watcher
 
@@ -327,12 +327,12 @@ async_init() {
 	zmodload zsh/zpty
 	zmodload zsh/datetime
 
-	# Check if zsh/zpty returns a fd or not
-	ASYNC_DISABLE_KILL=0
+	# Check if zsh/zpty returns a file descriptor or not, shell must also be interactive
+	ASYNC_USE_ZLE_HANDLER=0
 	typeset -h REPLY
 	zpty _async_test cat
-	if (( REPLY )); then
-		ASYNC_DISABLE_KILL=1
+	if (( REPLY )) && [[ $- == *i* ]]; then
+		ASYNC_USE_ZLE_HANDLER=1
 	fi
 	zpty -d _async_test
 }
