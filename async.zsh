@@ -331,7 +331,7 @@ async_init() {
 	ASYNC_USE_ZLE_HANDLER=0
 	typeset -h REPLY
 	zpty _async_test cat
-	if (( REPLY )) && [[ $- == *i* ]]; then
+	if (( REPLY )) && [[ -o interactive ]]; then
 		ASYNC_USE_ZLE_HANDLER=1
 	fi
 	zpty -d _async_test
