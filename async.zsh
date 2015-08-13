@@ -80,6 +80,8 @@ _async_worker() {
 
 		# Check for non-job commands sent to worker
 		case $job in
+			_unset_trap)
+				trap - CHLD; continue;;
 			_killjobs)
 				# Do nothing in the worker when receiving the TERM signal
 				trap '' TERM
@@ -166,8 +168,11 @@ async_process_results() {
 _async_zle_watcher() {
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 	local worker=$ASYNC_PTYS[$1]
+	local callback=$ASYNC_CALLBACKS[$worker]
 
-	async_process_results $worker $ASYNC_CALLBACKS[$worker]
+	if [[ -n $callback ]]; then
+		async_process_results $worker $callback
+	fi
 }
 
 #
@@ -207,7 +212,9 @@ async_register_callback() {
 
 	ASYNC_CALLBACKS[$worker]="$*"
 
-	trap '_async_notify_trap' WINCH
+	if (( ! ASYNC_DISABLE_KILL )); then
+		trap '_async_notify_trap' WINCH
+	fi
 }
 
 #
@@ -267,13 +274,19 @@ async_start_worker() {
 	zpty -t $worker &>/dev/null && return
 
 	typeset -gA ASYNC_PTYS
+	typeset -h REPLY
 	zpty -b $worker _async_worker -p $$ $@ || {
 		async_stop_worker $worker
 		return 1
 	}
-	ASYNC_PTYS[$REPLY]=$worker
 
-	zle -F $REPLY _async_zle_watcher
+	if (( REPLY )); then
+		ASYNC_PTYS[$REPLY]=$worker
+		zle -F $REPLY _async_zle_watcher
+
+		# If worker was called with -n, disable trap in favor of zle handler
+		async_job $worker _unset_trap
+	fi
 }
 
 #
@@ -308,8 +321,20 @@ async_stop_worker() {
 # 	async_init
 #
 async_init() {
+	(( ASYNC_INIT_DONE )) && return
+	ASYNC_INIT_DONE=1
+
 	zmodload zsh/zpty
 	zmodload zsh/datetime
+
+	# Check if zsh/zpty returns a fd or not
+	ASYNC_DISABLE_KILL=0
+	typeset -h REPLY
+	zpty _async_test cat
+	if (( REPLY )); then
+		ASYNC_DISABLE_KILL=1
+	fi
+	zpty -d _async_test
 }
 
 async() {
