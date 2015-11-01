@@ -1,7 +1,5 @@
 #!/usr/bin/env zsh
 
-emulate -L zsh
-
 # Allow script to call itself
 if [[ $1 == external-test ]]; then
 	sleep 0.4
