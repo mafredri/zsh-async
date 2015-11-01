@@ -186,6 +186,8 @@ _async_notify_trap() {
 # 	async_register_callback <worker_name> <callback_function>
 #
 async_register_callback() {
+	setopt localoptions nolocaltraps
+
 	typeset -gA ASYNC_CALLBACKS
 	local worker=$1; shift
 
