@@ -1,5 +1,12 @@
 #!/usr/bin/env zsh
 
+# Allow script to call itself
+if [[ $1 == external-test ]]; then
+	sleep 0.4
+	print "[external] Hello World!"
+	exit 0
+fi
+
 . ./async.zsh
 async_init
 
@@ -26,7 +33,7 @@ null_echo() {
 }
 
 external_echo() {
-	./async.test.external.sh
+	./async.test.sh external-test
 	print "external_echo()"
 }
 
@@ -92,7 +99,7 @@ async_job external external_echo
 sleep 0.1
 async_flush_jobs external
 sleep 0.1
-[[ -z $(ps -o pid=,command= | grep "[a]sync.test.external.sh") ]] && print "OK!" || print "FAILED!"
+[[ -z $(ps -o pid=,command= | grep "[a]sync.test.sh external-test") ]] && print "OK!" || print "FAILED!"
 sleep 0.3
 
 async_process_results external fail_if_result
