@@ -25,6 +25,16 @@ null_echo() {
 	print $'\0'"What about the errors?"$'\0' 1>&2
 }
 
+external_echo() {
+	./async.test.external.sh
+	print "external_echo()"
+}
+
+FAILED=0
+fail_if_result() {
+	FAILED=1
+}
+
 simple_result() {
 	print
 	print -l -- $1: $3
@@ -74,7 +84,21 @@ while (( JOBS > 0 )); do
 	sleep 0.001
 done
 print
-print "Jobs done!"
+print "Jobs done!\n"
+
+async_start_worker external
+print -n "Testing async_flush_jobs: "
+async_job external external_echo
+sleep 0.1
+async_flush_jobs external
+sleep 0.1
+[[ -z $(ps -o pid=,command= | grep "[a]sync.test.external.sh") ]] && print "OK!" || print "FAILED!"
+sleep 0.3
+
+async_process_results external fail_if_result
+print -n "Testing no output from external_echo: "
+(( ! FAILED )) && print "OK!" || print "FAILED!"
+FAILED=0
 
 # Cleanup
 async_stop_worker async async2 || print "ERROR: Could not clean up workers"
