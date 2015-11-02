@@ -80,6 +80,8 @@ _async_worker() {
 
 		# Check for non-job commands sent to worker
 		case $job in
+			_unset_trap)
+				trap - CHLD; continue;;
 			_killjobs)
 				# Do nothing in the worker when receiving the TERM signal
 				trap '' TERM
@@ -162,6 +164,18 @@ async_process_results() {
 	return 1
 }
 
+# Watch worker for output
+_async_zle_watcher() {
+	setopt localoptions noshwordsplit
+	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
+	local worker=$ASYNC_PTYS[$1]
+	local callback=$ASYNC_CALLBACKS[$worker]
+
+	if [[ -n $callback ]]; then
+		async_process_results $worker $callback
+	fi
+}
+
 #
 # Start a new asynchronous job on specified worker, assumes the worker is running.
 #
@@ -199,7 +213,9 @@ async_register_callback() {
 
 	ASYNC_CALLBACKS[$worker]="$*"
 
-	trap '_async_notify_trap' WINCH
+	if (( ! ASYNC_USE_ZLE_HANDLER )); then
+		trap '_async_notify_trap' WINCH
+	fi
 }
 
 #
@@ -256,7 +272,22 @@ async_start_worker() {
 	setopt localoptions noshwordsplit
 
 	local worker=$1; shift
-	zpty -t $worker &>/dev/null || zpty -b $worker "_async_worker" -p $$ $@ || async_stop_worker $worker
+	zpty -t $worker &>/dev/null && return
+
+	typeset -gA ASYNC_PTYS
+	typeset -h REPLY
+	zpty -b $worker _async_worker -p $$ $@ || {
+		async_stop_worker $worker
+		return 1
+	}
+
+	if (( ASYNC_USE_ZLE_HANDLER )); then
+		ASYNC_PTYS[$REPLY]=$worker
+		zle -F $REPLY _async_zle_watcher
+
+		# If worker was called with -n, disable trap in favor of zle handler
+		async_job $worker _unset_trap
+	fi
 }
 
 #
@@ -270,6 +301,13 @@ async_stop_worker() {
 
 	local ret=0
 	for worker in $@; do
+		# Find and unregister the zle handler for the worker
+		for k v in ${(@kv)ASYNC_PTYS}; do
+			if [[ $v == $worker ]]; then
+				zle -F $k
+				unset "ASYNC_PTYS[$k]"
+			fi
+		done
 		async_unregister_callback $worker
 		zpty -d $worker 2>/dev/null || ret=$?
 	done
@@ -284,8 +322,20 @@ async_stop_worker() {
 # 	async_init
 #
 async_init() {
+	(( ASYNC_INIT_DONE )) && return
+	ASYNC_INIT_DONE=1
+
 	zmodload zsh/zpty
 	zmodload zsh/datetime
+
+	# Check if zsh/zpty returns a file descriptor or not, shell must also be interactive
+	ASYNC_USE_ZLE_HANDLER=0
+	[[ -o interactive ]] && {
+		typeset -h REPLY
+		zpty _async_test cat
+		(( REPLY )) && ASYNC_USE_ZLE_HANDLER=1
+		zpty -d _async_test
+	}
 }
 
 async() {
