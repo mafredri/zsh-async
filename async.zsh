@@ -166,6 +166,7 @@ async_process_results() {
 
 # Watch worker for output
 _async_zle_watcher() {
+	setopt localoptions noshwordsplit
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 	local worker=$ASYNC_PTYS[$1]
 	local callback=$ASYNC_CALLBACKS[$worker]
