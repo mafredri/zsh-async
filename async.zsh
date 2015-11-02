@@ -330,12 +330,12 @@ async_init() {
 
 	# Check if zsh/zpty returns a file descriptor or not, shell must also be interactive
 	ASYNC_USE_ZLE_HANDLER=0
-	typeset -h REPLY
-	zpty _async_test cat
-	if (( REPLY )) && [[ -o interactive ]]; then
-		ASYNC_USE_ZLE_HANDLER=1
-	fi
-	zpty -d _async_test
+	[[ -o interactive ]] && {
+		typeset -h REPLY
+		zpty _async_test cat
+		(( REPLY )) && ASYNC_USE_ZLE_HANDLER=1
+		zpty -d _async_test
+	}
 }
 
 async() {
