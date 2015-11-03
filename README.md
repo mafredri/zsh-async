@@ -33,7 +33,11 @@ Initializes the async library (not required if using async from `$fpath` with au
 Start a new async worker with optional parameters, a worker can be told to only run unique tasks and to notify a process when tasks are complete.
 
 * `-u` unique. Only unique job names can run, e.g. the command `git status` will have `git` as the unique job name identifier
+
 * `-n` notify through `SIGWINCH` signal. Needs to be caught with a `trap '' WINCH` in the process defined by `-p`
+
+  **NOTE:** Since zsh version `5.1` (assuming an interactive shell) this option is no longer needed and has no effect. Signaling through `SIGWINCH` has been replaced by a ZLE watcher that is triggered on output from the `zpty` instance (still requires a callback function through `async_register_callback` though).
+
 * `-p` pid to notify (defaults to current pid)
 
 #### `async_stop_worker <worker_name_1> [<worker_name_2>]`
@@ -67,7 +71,7 @@ Unregister the callback for a specific worker.
 
 #### `async_flush_jobs <worker_name>`
 
-Flush all current jobs running on a worker. This will terminate any and all running processes under the worker, use with caution.
+Flush all current jobs running on a worker. This will terminate any and all running processes under the worker by sending a `SIGTERM` to the entire process group, use with caution.
 
 ## Example code
 
