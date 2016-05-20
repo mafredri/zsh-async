@@ -130,6 +130,7 @@ async_process_results() {
 	integer count=0
 	local worker=$1
 	local callback=$2
+	local caller=$3
 	local -a items
 	local IFS=$'\0'
 
@@ -160,6 +161,9 @@ async_process_results() {
 	# If we processed any results, return success
 	(( count )) && return 0
 
+	# Avoid printing exit value from setopt printexitvalue
+	[[ $caller = trap || $caller = watcher ]] && return 0
+
 	# No results were processed
 	return 1
 }
@@ -172,7 +176,7 @@ _async_zle_watcher() {
 	local callback=$ASYNC_CALLBACKS[$worker]
 
 	if [[ -n $callback ]]; then
-		async_process_results $worker $callback
+		async_process_results $worker $callback watcher
 	fi
 }
 
@@ -194,7 +198,7 @@ _async_notify_trap() {
 	setopt localoptions noshwordsplit
 
 	for k in ${(k)ASYNC_CALLBACKS}; do
-		async_process_results $k ${ASYNC_CALLBACKS[$k]}
+		async_process_results $k ${ASYNC_CALLBACKS[$k]} trap
 	done
 }
 
