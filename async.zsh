@@ -133,6 +133,7 @@ async_process_results() {
 	local caller=$3
 	local -a items
 	local IFS=$'\0'
+	local line
 
 	typeset -gA ASYNC_PROCESS_BUFFER
 	# Read output from zpty and parse it if available
