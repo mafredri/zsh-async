@@ -49,7 +49,7 @@ simple_result() {
 
 result() {
 	print
-	print -l -r -- "Compelted job: '$1'" "Return code: $2" "Duration: $4 seconds" "Stdout: '${3//$'\n'/\n}'" "Stderr: '${5//$'\n'/\n}'"
+	print -l -r -- "Completed job: '$1'" "Return code: $2" "Duration: $4 seconds" "Stdout: '${3//$'\n'/\n}'" "Stderr: '${5//$'\n'/\n}'"
 }
 
 integer JOBS
