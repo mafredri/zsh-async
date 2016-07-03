@@ -132,7 +132,7 @@ async_process_results() {
 	local callback=$2
 	local caller=$3
 	local -a items
-	local IFS=$'\0'
+	local line
 
 	typeset -gA ASYNC_PROCESS_BUFFER
 	# Read output from zpty and parse it if available
@@ -140,7 +140,11 @@ async_process_results() {
 		# Remove unwanted \r from output
 		ASYNC_PROCESS_BUFFER[$worker]+=${line//$'\r'$'\n'/$'\n'}
 		# Split buffer on null characters, preserve empty elements
-		items=("${(@)=ASYNC_PROCESS_BUFFER[$worker]}")
+		# (an anonymous function is used to avoid leaking modified IFS into the callback)
+		() {
+			local IFS=$'\0'
+			items=("${(@)=ASYNC_PROCESS_BUFFER[$worker]}")
+		}
 		# Remove last element since it's due to the return string separator structure
 		items=("${(@)items[1,${#items}-1]}")
 
