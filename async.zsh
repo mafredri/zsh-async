@@ -43,13 +43,13 @@ _async_job() {
 	# have run into a bug
 	ret=${ret:--1}
 
-	# Grab mutex lock
+	# Grab mutex lock, stalls until token is available
 	read -ep >/dev/null
 
 	# return output (<job_name> <return_code> <stdout> <duration> <stderr>)
 	print -r -N -n -- "$1" "$ret" "$stdout" "$duration" "$stderr"$'\0'
 
-	# Unlock mutex
+	# Unlock mutex by inserting a token
 	print -p "t"
 }
 
@@ -68,7 +68,7 @@ _async_worker() {
 		esac
 	done
 
-	# Create a mutex for writing to the terminal through coproc
+	# Create a mutex for writing to the terminal with coproc
 	coproc cat
 	# Insert token into coproc
 	print -p "t"
@@ -145,7 +145,8 @@ async_process_results() {
 			local IFS=$'\0'
 			items=("${(@)=ASYNC_PROCESS_BUFFER[$worker]}")
 		}
-		# Remove last element since it's due to the return string separator structure
+		# Remove last element since it's an artifact
+		# of the return string separator structure
 		items=("${(@)items[1,${#items}-1]}")
 
 		# Continue until we receive all information
