@@ -57,21 +57,39 @@ _async_job() {
 _async_worker() {
 	local -A storage
 	local unique=0
+	local notify_parent=0
+	local parent_pid=0
+	local coproc_pid=0
+
+	child_exit() {
+		# If coproc (cat) is the only child running, we close it to avoid
+		# leaving it running indefinitely and cluttering the process tree.
+		if [[ ${#jobstates} = 1 ]] && [[ $coproc_pid = ${${(v)jobstates##*:*:}%\=*} ]]; then
+			coproc :
+		fi
+
+		# On older version of zsh (pre 5.2) we notify the parent through a
+		# SIGWINCH signal because `zpty` did not return a file descriptor (fd)
+		# prior to that.
+		if (( notify_parent )); then
+			# We use SIGWINCH for compatibility with older versions of zsh
+			# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
+			# cause a deadlock in the shell under certain circumstances.
+			kill -WINCH $parent_pid
+		fi
+	}
+
+	# Register a SIGCHLD trap to handle the completion of child processes.
+	trap child_exit CHLD
 
 	# Process option parameters passed to worker
 	while getopts "np:u" opt; do
 		case $opt in
-			# Use SIGWINCH since many others seem to cause zsh to freeze, e.g. ALRM, INFO, etc.
-			n) trap 'kill -WINCH $ASYNC_WORKER_PARENT_PID' CHLD;;
-			p) ASYNC_WORKER_PARENT_PID=$OPTARG;;
+			n) notify_parent=1;;
+			p) parent_pid=$OPTARG;;
 			u) unique=1;;
 		esac
 	done
-
-	# Create a mutex for writing to the terminal with coproc
-	coproc cat
-	# Insert token into coproc
-	print -p "t"
 
 	while read -r cmd; do
 		# Separate on spaces into an array
@@ -81,7 +99,7 @@ _async_worker() {
 		# Check for non-job commands sent to worker
 		case $job in
 			_unset_trap)
-				trap - CHLD; continue;;
+				notify_parent=0; continue;;
 			_killjobs)
 				# Do nothing in the worker when receiving the TERM signal
 				trap '' TERM
@@ -101,6 +119,16 @@ _async_worker() {
 					continue 2
 				fi
 			done
+		fi
+
+		# Because we close the coproc after the last job has completed, we must
+		# recreate it when there are no other jobs running.
+		if (( !${#jobstates} )); then
+			# Use coproc as a mutex for synchronized output between children.
+			coproc cat
+			coproc_pid=$!
+			# Insert token into coproc
+			print -p "t"
 		fi
 
 		# Run task in background
