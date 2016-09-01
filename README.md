@@ -124,7 +124,8 @@ The test cases are really basic at this moment, making the more advanced is on t
 
 ## Limitations
 
-* Since null (`$'\0'`) characters are used to separate output from the async worker, any nulls will be stripped from the output to prevent corruption.
+* Since NULL-characters (`$'\0'`) are used to separate output from the async worker, any nulls will be stripped from the output to prevent corruption.
+* NULL-characters are also used by `async_job` to separate command arguments, care should be taken to not use NULLs in a async job.
 * ~~Currently you cannot pass a job like `"sleep 1 && echo hi"`, it needs to be a single command~~. Fixed in [this commit](https://github.com/mafredri/zsh-async/commit/e6d70e0eea0a80b1624f407f60795cfb1a4524e1).
 * Tell me? :)
 
