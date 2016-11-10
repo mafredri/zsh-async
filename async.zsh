@@ -194,7 +194,7 @@ async_process_results() {
 
 		# Work through all results
 		while (( ${#items} > 0 )); do
-			$callback "${(@)=items[1,5]}"
+			$callback "${(@)items[1,5]}"
 			shift 5 items
 			count+=1
 		done
