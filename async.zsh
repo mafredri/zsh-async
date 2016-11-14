@@ -61,6 +61,13 @@ _async_worker() {
 	local parent_pid=0
 	local coproc_pid=0
 
+	# Deactivate all zsh hooks inside the worker.
+	zsh_hooks=(chpwd periodic precmd preexec zshexit zshaddhistory)
+	unfunction $zsh_hooks &>/dev/null
+	# And hooks with registered functions.
+	zsh_hook_functions=( ${^zsh_hooks}_functions )
+	unset $zsh_hook_functions
+
 	child_exit() {
 		# If coproc (cat) is the only child running, we close it to avoid
 		# leaving it running indefinitely and cluttering the process tree.
