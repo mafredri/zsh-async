@@ -98,20 +98,11 @@ _async_worker() {
 		esac
 	done
 
-	local -a buffer
 	# Command arguments are separated with a null character.
 	while read -r -d $'\0' line; do
-		if [[ $line != ___ZSH_ASNYC_EOC___ ]]; then
-			# Read command arguments until we receive magic end-of-command string.
-			buffer+=($line)
-			continue
-		fi
-
-		# Copy command buffer
-		cmd=("${(@)=buffer}")
-
-		# Reset command buffer
-		buffer=()
+		# Copy command buffer, z splits the result
+		# into words using shell parsing.
+		typeset -a cmd=(${(z)line})
 
 		local job=$cmd[1]
 
@@ -243,13 +234,14 @@ async_job() {
 
 	local worker=$1; shift
 
-	local cmd p
-	for p in "$@"; do
-		cmd+="$p"$'\0'
-	done
-	cmd+=___ZSH_ASNYC_EOC___$'\0'
+	local -a cmd=($@)
+	if [[ ${#cmd} -gt 1 ]]; then
+		# Quote special characters using minimal form
+		# of quoting in multi argument commands.
+		cmd=(${(q-)cmd})
+	fi
 
-	zpty -w $worker $cmd
+	zpty -w $worker $cmd$'\0'
 }
 
 # This function traps notification signals and calls all registered callbacks
