@@ -70,6 +70,11 @@ async_job async git status --porcelain
 sleep 0.2
 async_process_results async simple_result
 
+# Test combined jobs
+async_job async 'sleep 0.1; simple_echo'
+sleep 0.2
+async_process_results async simple_result
+
 # Test uniqueness
 async_start_worker async2 -u
 # Only the first one will run!

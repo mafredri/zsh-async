@@ -26,7 +26,7 @@ _async_job() {
 	unset stdout stderr ret
 	eval "$(
 		{
-			stdout=$(eval '$@')
+			stdout=$(eval "$@")
 			ret=$?
 			typeset -p stdout ret
 		} 2> >(stderr=$(cat); typeset -p stderr)
