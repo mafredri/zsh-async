@@ -18,14 +18,14 @@ run_test() {
 	local ret
 
 	float start=$EPOCHREALTIME duration
-	out=$(
+	out="$(
 		# Initialize async.
 		source ./async.zsh
 		async_init
 
 		# Run the test.
-		$t
-	)
+		$t 2>&1
+	)"
 	ret=$?
 	duration=$(( EPOCHREALTIME - start ))
 
