@@ -15,6 +15,19 @@ test__async_job_print_hi() {
 	[[ $out[1] == print ]] && [[ $out[2] == 0 ]] && [[ $out[3] = hi ]]
 }
 
+test__async_job_stderr() {
+	coproc cat
+	print -p t  # Insert token into coproc.
+
+	local IFS=$'\0'  # Split on NULLs.
+	local out
+	out=($(_async_job 'print hi 1>&2'))
+
+	print $out
+
+	[[ $out[2] == 0 ]] && [[ -z $out[3] ]] && [[ $out[5] = hi ]]
+}
+
 test__async_job_wait_for_token() {
 	coproc cat
 
