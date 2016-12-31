@@ -7,7 +7,8 @@ test__async_job_print_hi() {
 	print -p t
 
 	local IFS=$'\0'
-	local out=($(_async_job print hi))
+	local out
+	out=($(_async_job print hi))
 	print $out
 	[[ $out[1] == print ]] && [[ $out[2] == 0 ]] && [[ $out[3] = hi ]]
 }
@@ -34,7 +35,8 @@ test__async_job_multiple_commands() {
 	print -p t
 
 	local IFS=$'\0'
-	local out=($(_async_job 'print -n hi; for i in "1 2" 3 4; do print -n $i; done'))
+	local out
+	out=($(_async_job 'print -n hi; for i in "1 2" 3 4; do print -n $i; done'))
 	print $out
 
 	[[ $out[3] = "hi1 234" ]]

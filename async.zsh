@@ -102,7 +102,8 @@ _async_worker() {
 	while read -r -d $'\0' line; do
 		# Copy command buffer, z splits the result
 		# into words using shell parsing.
-		typeset -a cmd=(${(z)line})
+		typeset -a cmd
+		cmd=(${(z)line})
 
 		local job=$cmd[1]
 
@@ -234,7 +235,8 @@ async_job() {
 
 	local worker=$1; shift
 
-	local -a cmd=($@)
+	local -a cmd
+	cmd=($@)
 	if [[ ${#cmd} -gt 1 ]]; then
 		# Quote special characters using minimal form
 		# of quoting in multi argument commands.
