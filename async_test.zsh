@@ -42,7 +42,7 @@ test__async_job_multiple_commands() {
 
 test_async_job_multiple_commands_in_string() {
 	local -a result
-	cb() { result=($@) }
+	cb() { result=("$@") }
 
 	async_start_worker test
 	async_job test 'print -n "hi  123 "; print -n bye'
@@ -57,7 +57,7 @@ test_async_job_multiple_commands_in_string() {
 
 test_async_job_git_status() {
 	local -a result
-	cb() { result=($@) }
+	cb() { result=("$@") }
 
 	async_start_worker test
 	async_job test git status --porcelain
@@ -72,7 +72,7 @@ test_async_job_git_status() {
 
 test_async_job_multiple_arguments_and_spaces() {
 	local -a result
-	cb() { result=($@) }
+	cb() { result=("$@") }
 
 	async_start_worker test
 	async_job test print "hello   world"
@@ -89,7 +89,7 @@ test_async_job_unique_worker() {
 	local -a result
 	cb() {
 		# Add to result so we can detect if it was called multiple times.
-		result+=($@)
+		result+=("$@")
 	}
 	helper() {
 		sleep 0.1; print $1
@@ -110,5 +110,5 @@ test_async_job_unique_worker() {
 	print $result
 
 	# Ensure that cb was only called once.
-	[[ ${#result} = 4 ]] && [[ $result[3] == one ]]
+	[[ ${#result} = 5 ]] && [[ $result[3] == one ]]
 }
