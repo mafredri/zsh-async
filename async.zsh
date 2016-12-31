@@ -144,7 +144,7 @@ _async_worker() {
 		# Run task in background
 		_async_job $cmd &
 		# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
-		storage[$job]=$!
+		storage[$job]="$!"
 	done
 }
 

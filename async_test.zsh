@@ -84,3 +84,31 @@ test_async_job_multiple_arguments_and_spaces() {
 
 	[[ $result[1] = print ]] && [[ $result[2] == 0 ]] && [[ $result[3] == "hello   world" ]]
 }
+
+test_async_job_unique_worker() {
+	local -a result
+	cb() {
+		# Add to result so we can detect if it was called multiple times.
+		result+=($@)
+	}
+	helper() {
+		sleep 0.1; print $1
+	}
+
+	# Start a unique (job) worker.
+	async_start_worker test -u
+
+	# Launch two jobs with the same name, the first one should be
+	# allowed to complete whereas the second one is never run.
+	async_job test helper one
+	async_job test helper two
+
+	while ! async_process_results test cb; do
+		sleep 0.2
+	done
+
+	print $result
+
+	# Ensure that cb was only called once.
+	[[ ${#result} = 4 ]] && [[ $result[3] == one ]]
+}
