@@ -40,7 +40,7 @@ test__async_job_multiple_commands() {
 	[[ $out[3] = "hi1 234" ]]
 }
 
-test_async_job_process_callback() {
+test_async_job_multiple_commands_in_string() {
 	local -a result
 	cb() { result=($@) }
 
@@ -53,4 +53,34 @@ test_async_job_process_callback() {
 	print $result
 
 	[[ $result[1] = print ]] && [[ $result[3] = "hi  123 bye" ]]
+}
+
+test_async_job_git_status() {
+	local -a result
+	cb() { result=($@) }
+
+	async_start_worker test
+	async_job test git status --porcelain
+	while ! async_process_results test cb; do
+		sleep 0.1
+	done
+
+	print $result
+
+	[[ $result[1] = git ]] && [[ $result[2] == 0 ]] && [[ $result[3] == $(git status --porcelain) ]]
+}
+
+test_async_job_multiple_arguments_and_spaces() {
+	local -a result
+	cb() { result=($@) }
+
+	async_start_worker test
+	async_job test print "hello   world"
+	while ! async_process_results test cb; do
+		sleep 0.1
+	done
+
+	print $result
+
+	[[ $result[1] = print ]] && [[ $result[2] == 0 ]] && [[ $result[3] == "hello   world" ]]
 }
