@@ -42,7 +42,7 @@ test__async_job_wait_for_token() {
 
 	duration=$(( EPOCHREALTIME - start ))
 	# Fail if the execution time was faster than 0.1 seconds.
-	(( duration > 0.1 )) || t_error "execution was too fast, want > 0.1, got" $duration
+	(( duration >= 0.1 )) || t_error "execution was too fast, want >= 0.1, got" $duration
 }
 
 test__async_job_multiple_commands() {
@@ -66,7 +66,7 @@ test_async_job_multiple_commands_in_string() {
 	async_start_worker test
 	async_job test 'print -n "hi  123 "; print -n bye'
 	while ! async_process_results test cb; do
-		sleep 0.1
+		sleep 0.05
 	done
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
@@ -80,7 +80,7 @@ test_async_job_git_status() {
 	async_start_worker test
 	async_job test git status --porcelain
 	while ! async_process_results test cb; do
-		sleep 0.1
+		sleep 0.05
 	done
 
 	[[ $result[1] = git ]] || t_error "want command name: git, got" $result[1]
@@ -98,7 +98,7 @@ test_async_job_multiple_arguments_and_spaces() {
 	async_start_worker test
 	async_job test print "hello   world"
 	while ! async_process_results test cb; do
-		sleep 0.1
+		sleep 0.05
 	done
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
@@ -128,7 +128,7 @@ test_async_job_unique_worker() {
 	async_job test helper two
 
 	while ! async_process_results test cb; do
-		sleep 0.1
+		sleep 0.05
 	done
 
 	# If both jobs were running but only one was complete,
@@ -141,6 +141,49 @@ test_async_job_unique_worker() {
 	# Ensure that cb was only called once with correc output.
 	[[ ${#result} = 5 ]] || t_error "result: want 5 elements, got" ${#result}
 	[[ $result[3] = one ]] || t_error "output: want \"one\", got" ${(qqq)result[3]}
+}
+
+test_async_worker_notify_sigwinch() {
+	local -a result
+	local code
+
+	# Helper function, used to get pid for process via coproc.
+	# Runs in a child process, so t_ functions will not work.
+	sigwinch_helper() {
+		typeset -a result
+		cb() { result=("$@") }
+
+		ASYNC_USE_ZLE_HANDLER=0
+
+		# Wait for pid.
+		read -p mypid
+		async_start_worker test -p $mypid -n
+		async_register_callback test cb
+
+		async_job test 'sleep 0.1; print hi'
+
+		while (( ! $#result )); do
+			sleep 0.05
+		done
+
+		print $result
+	}
+
+	# Launch sigwinch_helper as a child process and send the pid via coproc
+	# so it can be used by the async worker as a target for SIGWINCH.
+	# Maybe there's a better way of doing this? This is fine though =).
+	result=($(
+		coproc cat
+		sigwinch_helper &
+		pid=$!
+		print -p $pid
+		wait $pid
+		coproc exit
+	))
+	code=$?
+
+	[[ $code = 0 ]] || t_error "__test_async_worker_notify_kill: expected exit 0, got" $code
+	[[ $result[3] = hi ]] || t_error "expected output: hi, got" $result[3]
 }
 
 test_main() {

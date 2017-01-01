@@ -66,7 +66,7 @@ t_fatal() {
 
 # run_test runs the test function and reports it's status.
 run_test() {
-	local code
+	local num=$1 t=$2 code
 
 	# Manage stdout / stderr.
 	exec 3>&1
