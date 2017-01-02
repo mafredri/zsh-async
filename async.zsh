@@ -353,6 +353,13 @@ async_start_worker() {
 	# Re-enable it if it was enabled, for debugging.
 	(( has_xtrace )) && setopt xtrace
 
+	if [[ $ZSH_VERSION < 5.0.8 ]]; then
+		# For ZSH versions older than 5.0.8 we delay a bit to give
+		# time for the worker to start before issuing commands,
+		# otherwise it will not be ready to receive them.
+		sleep 0.05
+	fi
+
 	if (( ASYNC_USE_ZLE_HANDLER )); then
 		ASYNC_PTYS[$REPLY]=$worker
 		zle -F $REPLY _async_zle_watcher
