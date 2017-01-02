@@ -145,44 +145,22 @@ test_async_job_unique_worker() {
 
 test_async_worker_notify_sigwinch() {
 	local -a result
-	local code
+	cb() { result=("$@") }
 
-	# Helper function, used to get pid for process via coproc.
-	# Runs in a child process, so t_ functions will not work.
-	sigwinch_helper() {
-		typeset -a result
-		cb() { result=("$@") }
+	# Set deadline for test.
+	t_timeout 2
 
-		ASYNC_USE_ZLE_HANDLER=0
+	ASYNC_USE_ZLE_HANDLER=0
 
-		# Wait for pid.
-		read -p mypid
-		async_start_worker test -p $mypid -n
-		async_register_callback test cb
+	async_start_worker test -p $$ -n
+	async_register_callback test cb
 
-		async_job test 'sleep 0.1; print hi'
+	async_job test 'sleep 0.1; print hi'
 
-		while (( ! $#result )); do
-			sleep 0.05
-		done
+	while (( ! $#result )); do
+		sleep 0.05
+	done
 
-		print $result
-	}
-
-	# Launch sigwinch_helper as a child process and send the pid via coproc
-	# so it can be used by the async worker as a target for SIGWINCH.
-	# Maybe there's a better way of doing this? This is fine though =).
-	result=($(
-		coproc cat
-		sigwinch_helper &
-		pid=$!
-		print -p $pid
-		wait $pid
-		coproc exit
-	))
-	code=$?
-
-	[[ $code = 0 ]] || t_error "__test_async_worker_notify_kill: expected exit 0, got" $code
 	[[ $result[3] = hi ]] || t_error "expected output: hi, got" $result[3]
 }
 
