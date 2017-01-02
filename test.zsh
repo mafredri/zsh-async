@@ -7,8 +7,8 @@
 emulate -L zsh
 
 trap '
-	trap '' TERM
-	kill -TERM -$$
+	trap '' HUP
+	kill -HUP -$$
 	trap '' EXIT
 	exit 1
 ' INT EXIT TERM
