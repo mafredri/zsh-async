@@ -13,6 +13,7 @@ env:
     - ZSH_VERSION=5.3
     - ZSH_VERSION=5.2
     - ZSH_VERSION=5.1.1
+    - ZSH_VERSION=5.1
     - ZSH_VERSION=5.0.8
     - ZSH_VERSION=5.0.2
 
