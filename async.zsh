@@ -10,6 +10,9 @@
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
+	# Disable xtrace as it would mangle the output.
+	setopt localoptions noxtrace
+
 	# Store start time as double precision (+E disables scientific notation)
 	float -F duration=$EPOCHREALTIME
 
@@ -333,10 +336,22 @@ async_start_worker() {
 
 	typeset -gA ASYNC_PTYS
 	typeset -h REPLY
+	typeset has_xtrace=0
+
+	# Make sure async worker is started without xtrace
+	# (the trace output interferes with the worker).
+	[[ -o xtrace ]] && {
+		has_xtrace=1
+		unsetopt xtrace
+	}
+
 	zpty -b $worker _async_worker -p $$ $@ || {
 		async_stop_worker $worker
 		return 1
 	}
+
+	# Re-enable it if it was enabled, for debugging.
+	(( has_xtrace )) && setopt xtrace
 
 	if (( ASYNC_USE_ZLE_HANDLER )); then
 		ASYNC_PTYS[$REPLY]=$worker
