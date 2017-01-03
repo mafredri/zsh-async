@@ -68,6 +68,7 @@ test_async_job_multiple_commands_in_string() {
 	while ! async_process_results test cb; do
 		sleep 0.05
 	done
+	async_stop_worker test
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
 	[[ $result[3] = "hi  123 bye" ]] || t_error 'want output: "hi  123 bye", got' ${(qqq)result[3]}
@@ -82,6 +83,7 @@ test_async_job_git_status() {
 	while ! async_process_results test cb; do
 		sleep 0.05
 	done
+	async_stop_worker test
 
 	[[ $result[1] = git ]] || t_error "want command name: git, got" $result[1]
 	[[ $result[2] = 0 ]] || t_error "want exit code: 0, got" $result[2]
@@ -100,6 +102,7 @@ test_async_job_multiple_arguments_and_spaces() {
 	while ! async_process_results test cb; do
 		sleep 0.05
 	done
+	async_stop_worker test
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
 	[[ $result[2] = 0 ]] || t_error "want exit code: 0, got" $result[2]
@@ -138,6 +141,8 @@ test_async_job_unique_worker() {
 	sleep 0.1
 	async_process_results test cb
 
+	async_stop_worker test
+
 	# Ensure that cb was only called once with correc output.
 	[[ ${#result} = 5 ]] || t_error "result: want 5 elements, got" ${#result}
 	[[ $result[3] = one ]] || t_error "output: want \"one\", got" ${(qqq)result[3]}
@@ -160,6 +165,8 @@ test_async_worker_notify_sigwinch() {
 	while (( ! $#result )); do
 		sleep 0.05
 	done
+
+	async_stop_worker test
 
 	[[ $result[3] = hi ]] || t_error "expected output: hi, got" $result[3]
 }
