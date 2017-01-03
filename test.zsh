@@ -19,6 +19,7 @@ zmodload zsh/zutil
 zmodload zsh/zpty
 
 TEST_GLOB=.
+TEST_RUN=
 TEST_VERBOSE=0
 TEST_TRACE=1
 TEST_CODE_ERROR=100
@@ -26,18 +27,21 @@ TEST_CODE_SKIP=101
 TEST_CODE_TIMEOUT=102
 
 show_help() {
-	print "usage: ./test.zsh [-v] [search glob]"
+	print "usage: ./test.zsh [-v] [-x] [-run pattern] [search pattern]"
 }
 
 parse_opts() {
-	local -a verbose trace help
-	zparseopts -E -D \
-		v=verbose -verbose=verbose \
-		x=trace -trace=trace \
-		h=help -help=help \
-		\?=help
+	local -a verbose trace help run
 
-	(( $+help[1] )) && show_help && exit 0
+	local out
+	zparseopts -E -D \
+		v=verbose verbose=verbose -verbose=verbose \
+		x=trace trace=trace -trace=trace \
+		h=help -help=help \
+		\?=help \
+		run:=run -run:=run
+
+	(( $? )) || (( $+help[1] )) && show_help && exit 0
 
 	if (( $#@ > 1 )); then
 		print -- "unknown arguments: $@"
@@ -48,6 +52,7 @@ parse_opts() {
 	[[ -n $1 ]] && TEST_GLOB=$1/
 	TEST_VERBOSE=$+verbose[1]
 	TEST_TRACE=$+trace[1]
+	(( $+run[2] )) && TEST_RUN=$run[2]
 }
 
 # t_log is for printing log output, visible in verbose (-v) mode.
@@ -87,8 +92,10 @@ t_timeout() {
 	__test_timeout_pid=$!
 }
 
-# run_test runs the test function and reports it's status.
-run_test() {
+# run_test_worker launches a worker and waits for a test (runs in zpty).
+run_test_worker() {
+	emulate -L zsh
+
 	integer __test_timeout_pid=0 __test_exit=0
 	typeset -g -a __test_err_lines
 
@@ -147,8 +154,8 @@ run_test() {
 
 # run_test_module runs all the tests from a test module (asynchronously).
 run_test_module() {
-	typeset module=$1
-	typeset -a tests
+	local module=$1
+	local -a tests
 	float start module_time
 
 	# Load the test module.
@@ -156,6 +163,7 @@ run_test_module() {
 
 	# Find all functions named test_* (sorted), excluding test_main.
 	tests=(${(R)${(okM)functions:#test_*}:#test_main})
+	[[ -n $TEST_RUN ]] && tests=(${(M)tests:#*$TEST_RUN*})
 	num_tests=${#tests}
 
 	# Run test_main.
@@ -166,7 +174,7 @@ run_test_module() {
 	# Launch all zpty test runners.
 	for t in $tests; do
 		(( TEST_TRACE )) && unsetopt xtrace
-		zpty -b $t run_test $t
+		zpty -b $t run_test_worker
 		(( TEST_TRACE )) && setopt xtrace
 	done
 
@@ -185,11 +193,9 @@ run_test_module() {
 
 	typeset -A results
 	typeset -a _tests
-	integer i
 	_tests=($tests)
 	# Copy the output buffer until all tests have completed.
 	while (( $#_tests )); do
-		i=0
 		for t in $_tests; do
 			line="$results[$t]"
 
