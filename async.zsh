@@ -101,7 +101,7 @@ _async_worker() {
 		esac
 	done
 
-	# Command arguments are separated with a null character.
+	# Wait for jobs, a job request ends with a NULL character.
 	while read -r -d $'\0' line; do
 		# Copy command buffer, z splits the result
 		# into words using shell parsing.
