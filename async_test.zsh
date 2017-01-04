@@ -8,6 +8,8 @@ test__async_job_print_hi() {
 	local out
 	out=($(_async_job print hi))
 
+	coproc exit
+
 	[[ $out[1] = print ]] || t_error "command name should be print, got" $out[1]
 	[[ $out[2] = 0 ]] || t_error "want exit code 0, got" $out[2]
 	[[ $out[3] = hi ]] || t_error "want output: hi, got" $out[3]
@@ -20,6 +22,8 @@ test__async_job_stderr() {
 	local IFS=$'\0'  # Split on NULLs.
 	local out
 	out=($(_async_job 'print hi 1>&2'))
+
+	coproc exit
 
 	[[ $out[2] = 0 ]] || t_error "want status 0, got" $out[2]
 	[[ -z $out[3] ]] || t_error "want empty output, got" $out[3]
@@ -40,6 +44,8 @@ test__async_job_wait_for_token() {
 
 	wait $job
 
+	coproc exit
+
 	duration=$(( EPOCHREALTIME - start ))
 	# Fail if the execution time was faster than 0.1 seconds.
 	(( duration >= 0.1 )) || t_error "execution was too fast, want >= 0.1, got" $duration
@@ -52,6 +58,8 @@ test__async_job_multiple_commands() {
 	local IFS=$'\0'  # Split on NULLs.
 	local out
 	out=($(_async_job 'print -n hi; for i in "1 2" 3 4; do print -n $i; done'))
+
+	coproc exit
 
 	# $out[1] here will be the entire string passed to _async_job()
 	# ('print -n hi...') since proper command parsing is done by
@@ -151,9 +159,6 @@ test_async_job_unique_worker() {
 test_async_worker_notify_sigwinch() {
 	local -a result
 	cb() { result=("$@") }
-
-	# Set deadline for test.
-	t_timeout 2
 
 	ASYNC_USE_ZLE_HANDLER=0
 
