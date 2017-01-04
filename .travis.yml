@@ -7,15 +7,17 @@ addons:
 
 env:
   global:
-    - ZSH_DIST=$HOME/.zsh
+    - ZSH_DIST=$HOME/.zshdist
   matrix:
-    - ZSH_VERSION=5.3.1
-    - ZSH_VERSION=5.3
-    - ZSH_VERSION=5.2
-    - ZSH_VERSION=5.1.1
-    - ZSH_VERSION=5.1
-    - ZSH_VERSION=5.0.8
-    - ZSH_VERSION=5.0.2
+    # Use _ZSH_VERSION since if ZSH_VERSION is present, travis cacher thinks it
+    # is running in zsh and tries to use zsh specific functions.
+    - _ZSH_VERSION=5.3.1
+    - _ZSH_VERSION=5.3
+    - _ZSH_VERSION=5.2
+    - _ZSH_VERSION=5.1.1
+    - _ZSH_VERSION=5.1
+    - _ZSH_VERSION=5.0.8
+    - _ZSH_VERSION=5.0.2
 
 cache:
   directories:
@@ -40,7 +42,7 @@ before_script:
       fi
       export PATH="$dest/bin:$PATH"
     }
-  - setup_zsh $ZSH_VERSION
+  - setup_zsh $_ZSH_VERSION
   - zsh --version
 
 script:
