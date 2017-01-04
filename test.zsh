@@ -6,24 +6,18 @@
 #
 emulate -L zsh
 
-trap '
-	trap '' HUP
-	kill -HUP -$$
-	trap '' EXIT
-	exit 1
-' INT EXIT TERM
 
 zmodload zsh/datetime
 zmodload zsh/parameter
 zmodload zsh/zutil
-zmodload zsh/zpty
+zmodload zsh/system
 
 TEST_GLOB=.
 TEST_RUN=
 TEST_VERBOSE=0
 TEST_TRACE=1
-TEST_CODE_ERROR=100
-TEST_CODE_SKIP=101
+TEST_CODE_SKIP=100
+TEST_CODE_ERROR=101
 TEST_CODE_TIMEOUT=102
 
 show_help() {
@@ -31,11 +25,12 @@ show_help() {
 }
 
 parse_opts() {
-	local -a verbose trace help run
+	local -a verbose debug trace help run
 
 	local out
 	zparseopts -E -D \
 		v=verbose verbose=verbose -verbose=verbose \
+		d=debug debug=debug -debug=debug \
 		x=trace trace=trace -trace=trace \
 		h=help -help=help \
 		\?=help \
@@ -52,104 +47,73 @@ parse_opts() {
 	[[ -n $1 ]] && TEST_GLOB=$1/
 	TEST_VERBOSE=$+verbose[1]
 	TEST_TRACE=$+trace[1]
+	ZTEST_DEBUG=$+debug[1]
 	(( $+run[2] )) && TEST_RUN=$run[2]
 }
 
-# t_log is for printing log output, visible in verbose (-v) mode.
-t_log() {
-	print "\t${funcfiletrace[1]}: $@"
-}
-
-# t_skip is for skipping a test.
-t_skip() {
-	print "\t${funcfiletrace[1]}: $@"
-	exit $TEST_CODE_SKIP
-}
-
-# t_error logs the error and fails the test without aborting.
-t_error() {
-	# Store the function line that produced the error in
-	# __test_err_lines, used to figure out if an error happened.
-	__test_err_lines+=(${${(s.:.)functrace[1]}[2]})
-	print "\t${funcfiletrace[1]}: $@"
-}
-
-# t_fatal logs the error and immediately fails the test.
-t_fatal() {
-	print "\t${funcfiletrace[1]}: $@"
-	exit $TEST_CODE_ERROR
-}
-
-# t_timeout sets a timeout for the test (10 seconds by default).
-t_timeout() {
-	local timeout=${1:-10}
-	(( __test_timeout_pid )) && kill -KILL $__test_timeout_pid
-	{
-		sleep $timeout
-		print "\t${funcfiletrace[1]}: timed out after ${timeout}s"
-		kill -ALRM $$
-	} &
-	__test_timeout_pid=$!
-}
-
-# run_test_worker launches a worker and waits for a test (runs in zpty).
-run_test_worker() {
+t_runner_init() {
 	emulate -L zsh
 
-	integer __test_timeout_pid=0 __test_exit=0
-	typeset -g -a __test_err_lines
+	zmodload zsh/parameter
 
-	__test_cleanup() {
-		trap '' TERM    # Catch SIGTERM
-		kill -TERM -$$  # Terminate process group.
-		trap - TERM     # Reset trap.
-	}
-	__test_end() {
-		print -n $'\0'$__test_exit$'\0'
-		printf "%.2fs"$'\0' $__test_time
-		print -n DONE$'\0'
-		(( TEST_TRACE )) && unsetopt xtrace  # Do not log sleep...
-
-		# Keep test worker running until all output has been read.
-		while :; do sleep 1; done
+	# _t_runner is the main loop that waits for tests,
+	# used to abort test execution by exec.
+	_t_runner() {
+		integer _test_errors=0
+		while read -r; do
+			eval "$REPLY"
+		done
 	}
 
-	# Set TRAPALRM for catching timeouts.
-	TRAPALRM() {
-		__test_cleanup
-
-		__test_exit=TEST_CODE_TIMEOUT
-		__test_time=$(( EPOCHREALTIME - __test_start ))
-		__test_end
+	# t_log is for printing log output, visible in verbose (-v) mode.
+	t_log() {
+		local line=$funcfiletrace[1]
+		[[ ${line%:[0-9]*} = "" ]] && line=ztest:$functrace[1]  # Not from a file.
+		print -u7 $'\t'$line: $@
 	}
 
-	# Wait for the function name for the test.
-	read __test_name
-
-	(( TEST_TRACE )) && {
-		# Redirect stderr (trace) to log file (to keep test stdout clean).
-		exec 2>/tmp/ztest-${__test_name}.log
-		setopt xtrace
+	# t_skip is for skipping a test.
+	t_skip() {
+		print -u7 $'\t'${funcfiletrace[1]}: $@
+		() { return 100 }
+		t_done
 	}
 
-	# Set default timeout for test (10 seconds).
-	t_timeout
+	# t_error logs the error and fails the test without aborting.
+	t_error() {
+		(( _test_errors++ ))
+		print -u7 $'\t'${funcfiletrace[1]}: $@
+	}
 
-	# Start counting time for test execution.
-	float __test_start=$EPOCHREALTIME __test_time=0
+	# t_fatal fails the test and halts execution immediately.
+	t_fatal() {
+		print -u7 $'\t'${funcfiletrace[1]}: $@
+		() { return 101 }
+		t_done
+	}
 
-	# Run test.
-	$__test_name
-	__test_exit=$?
-	__test_time=$(( EPOCHREALTIME - __test_start ))
+	# t_done completes the test execution, called automatically after a test.
+	# Can also be called manually when the test is done.
+	t_done() {
+		local ret=$? w=${1:-1}
+		(( _test_errors )) && ret=101
 
-	# Preform cleanup tasks.
-	__test_cleanup
+		(( w )) && wait    # Wait for test children to exit.
+		print -n -u8 $ret  # Send exit code to ztest.
+		exec _t_runner     # Replace shell, wait for new test.
+	}
 
-	# Did we encounter any errors?
-	(( $#__test_err_lines > 0 )) && __test_exit=$TEST_CODE_ERROR
+	source $1  # Load the test module.
 
-	__test_end
+	# Send available test functions to main process.
+	print -u7 ${(R)${(okM)functions:#test_*}:#test_main}
+
+	# Run test_main.
+	if [[ -n $functions[test_main] ]]; then
+		test_main
+	fi
+
+	exec _t_runner  # Wait for commands.
 }
 
 # run_test_module runs all the tests from a test module (asynchronously).
@@ -158,122 +122,107 @@ run_test_module() {
 	local -a tests
 	float start module_time
 
-	# Load the test module.
-	source $module
+	# Create fd's for communication with test runner.
+	integer run_pid cmdoutfd cmdinfd outfd infd doneoutfd doneinfd
 
-	# Find all functions named test_* (sorted), excluding test_main.
-	tests=(${(R)${(okM)functions:#test_*}:#test_main})
+	coproc cat; exec {cmdoutfd}>&p; exec {cmdinfd}<&p
+	coproc cat; exec {outfd}>&p; exec {infd}<&p
+	coproc cat; exec {doneoutfd}>&p; exec {doneinfd}<&p
+
+	# No need to keep coproc (&p) open since we
+	# have redirected the outputs and inputs.
+	coproc exit
+
+	# Launch a new interactive zsh test runner. We don't capture stdout
+	typeset -a run_args
+	(( TEST_TRACE )) && run_args+=('-x')
+	zsh -s $run_args <&$cmdinfd 7>&$outfd 8>&$doneoutfd &
+	run_pid=$!
+
+	# Initialize by sending function body from t_runner_init
+	# and immediately execute it as an anonymous function.
+	syswrite -o $cmdoutfd "() { ${functions[t_runner_init]} } $module"$'\n'
+	sysread -i $infd
+	tests=(${(@)=REPLY})
 	[[ -n $TEST_RUN ]] && tests=(${(M)tests:#*$TEST_RUN*})
-	num_tests=${#tests}
 
-	# Run test_main.
-	if [[ -n $functions[test_main] ]]; then
-		test_main
-	fi
+	integer mod_exit=0
+	float mod_start mod_time
 
-	# Launch all zpty test runners.
-	for t in $tests; do
-		(( TEST_TRACE )) && unsetopt xtrace
-		zpty -b $t run_test_worker
-		(( TEST_TRACE )) && setopt xtrace
-	done
+	mod_start=$EPOCHREALTIME  # Store the module start time.
 
-	if [[ $ZSH_VERSION < 5.0.8 ]]; then
-		# Give the zpty worker time to boot-up on pre-5.0.8 versions of zsh.
-		sleep 0.05
-	fi
+	# Run all tests.
+	local test_out
+	float test_start test_time
+	integer text_exit
 
-	# Track execution time for test module.
-	start=$EPOCHREALTIME
+	for test in $tests; do
+		(( TEST_VERBOSE )) && print "=== RUN   $test"
 
-	# Send the test function to the runner, initiating the test.
-	for t in $tests; do
-		zpty -w $t $t
-	done
+		test_start=$EPOCHREALTIME  # Store the test start time.
 
-	typeset -A results
-	typeset -a _tests
-	_tests=($tests)
-	# Copy the output buffer until all tests have completed.
-	while (( $#_tests )); do
-		for t in $_tests; do
-			line="$results[$t]"
+		# Start the test.
+		syswrite -o $cmdoutfd "$test; t_done"$'\n'
+		sysread -i $doneinfd  # Wait for message on done channel.
 
-			# Read all available output from zpty.
-			while zpty -rt $t l; do
-				line+="$l"
-			done
+		# Store the test execution time.
+		test_time=$(( EPOCHREALTIME - test_start ))
+		test_exit=$REPLY  # Store reply from sysread
 
-			# Check if we received all output from test,
-			# if true, we stop processing it.
-			if [[ $line[$#line-5,$#line] = $'\0'DONE$'\0' ]]; then
-				_tests=("${(@)_tests:#$t}")
-			fi
-
-			results[$t]="$line"
+		# Read all output from the test output channel.
+		test_out=
+		while sysread -i $infd -t 0; do
+			test_out+=$REPLY
 		done
 
-		# Add a tiny delay between iterations, we provide 3-decimal
-		# accuracy for test-suite, so this should be OK.
-		sleep 0.0001
+		case $test_exit in
+			0) state=PASS;;
+			101|102) state=FAIL; mod_exit=1;;
+			100) state=SKIP;;
+			*) state=UNKN;;
+		esac
+
+		if [[ $state = FAIL ]] || (( TEST_VERBOSE )); then
+			printf -- "--- $state: $test (%.2f)\n" $test_time
+			print -n $test_out
+		fi
 	done
 
-	module_time=$(( EPOCHREALTIME - start ))
+	# Store module execution time.
+	mod_time=$(( EPOCHREALTIME - mod_start ))
 
-	# Clean up zpty test runners.
-	zpty -d $tests
+	# Perform cleanup.
+	kill -HUP $run_pid
+	exec {outfd}>&-
+	exec {infd}<&-
+	exec {cmdinfd}>&-
+	exec {cmdoutfd}<&-
+	exec {doneinfd}<&-
+	exec {doneoutfd}>&-
 
-	typeset -a test_result
-	typeset state time out
-	integer show code failed=0
-	IFS=$'\0'
-	# Parse test results and pretty-print them.
-	for t in $tests; do
-		test_result=("${(@)=results[$t]}")
-
-		state=PASS
-		show=$TEST_VERBOSE
-		code=$test_result[2]
-		time=$test_result[3]
-		out=$test_result[1]
-
-		if (( code == TEST_CODE_ERROR )); then
-			state=FAIL
-			show=1
-			(( failed++ ))
-		elif (( code == TEST_CODE_TIMEOUT )); then
-			state=FAIL
-			show=1
-			(( failed++ ))
-		elif (( code == TEST_CODE_SKIP )); then
-			state=SKIP
-		fi
-
-		if (( !show )); then
-			continue
-		fi
-		print "=== RUN   $t"
-		print -- "--- $state: $t ($time)"
-		[[ -n $out ]] && print -n $out
-	done
-
-	# Print test module status.
-	if (( failed > 0 )); then
+	if (( mod_exit )); then
 		print "FAIL"
-		printf "FAIL\t$module\t%.3fs\n" $module_time
-		return 1
+		(( TEST_VERBOSE )) && print "exit code $mod_exit"
+		printf "FAIL\t$module\t%.3fs\n" $mod_time
+	else
+		(( TEST_VERBOSE )) && print "PASS"
+		printf "ok\t$module\t%.3fs\n" $mod_time
 	fi
 
-	if (( TEST_VERBOSE )); then
-		print "PASS"
-	fi
-	printf "ok\t$module\t%.3fs\n" $module_time
+	return $mod_exit
 }
+
+cleanup() {
+	trap - HUP
+	kill -HUP -- -$$
+}
+
+trap cleanup EXIT INT HUP QUIT TERM USR1
 
 # Parse command arguments.
 parse_opts $@
 
-(( TEST_TRACE )) && setopt xtrace
+(( ZTEST_DEBUG )) && setopt xtrace
 
 # Execute tests modules.
 failed=0
