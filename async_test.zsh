@@ -253,6 +253,87 @@ test_async_flush_jobs() {
 	[[ $r[3] = "" ]] || t_error "stdout: want '', got ${(q-)r[3]}"
 }
 
+zpty_init() {
+	zmodload zsh/zpty
+
+	export PS1='<PROMPT>'
+	zpty zsh 'zsh -f +Z'
+	zpty -r zsh zpty_init1 "*<PROMPT>*" || {
+		t_log "initial prompt missing"
+		return 1
+	}
+
+	tmp=$(mktemp -t async_test_zpty_init.XXXXXX)
+	print -lr - "$@" > $tmp
+	zpty -w zsh ". '$tmp'"
+	zpty -r -m zsh zpty_init2 "*<PROMPT>*" || {
+		t_log "prompt missing"
+		rm $tmp
+		return 1
+	}
+	rm $tmp
+}
+
+zpty_run() {
+	zpty -w zsh "$*"
+	zpty -r -m zsh zpty_run "*<PROMPT>*" || {
+		t_log "prompt missing after ${(q-)*}"
+		return 1
+	}
+}
+
+zpty_deinit() {
+	zpty -d zsh
+}
+
+test_zle_watcher() {
+	if [[ $ZSH_VERSION < 5.2 ]]; then
+		t_skip "zpty does not return a file descriptor on zsh <5.2"
+	fi
+
+	zpty_init '
+		emulate -R zsh
+		setopt zle
+		stty 38400 columns 80 rows 24 tabs -icanon -iexten
+		TERM=vt100
+
+		. "'$PWD'/async.zsh"
+		async_init
+		print_result_cb() { print ${(q-)@} }
+	' || {
+		zpty_deinit
+		t_fatal "failed to init zpty"
+	}
+
+	zpty_run async_start_worker test || {
+		zpty_deinit
+		t_fatal "could not start async worker"
+	}
+
+	zpty_run async_register_callback test print_result_cb || {
+		zpty_deinit
+		t_fatal "could not register callback"
+	}
+
+	zpty -w zsh "zle -F"
+	zpty -r -m zsh result "*_async_zle_watcher*" || {
+		zpty_deinit
+		t_fatal "want _async_zle_watcher to be registered as zle watcher, got output ${(q-)result}"
+	}
+
+	zpty_run async_job test 'print hello world' || {
+		zpty_deinit
+		t_fatal "could not send async_job command"
+	}
+
+	zpty -r -m zsh result "*print 0 'hello world'*" || {
+		zpty_deinit
+		t_fatal "want \"print 0 'hello world'\", got output ${(q-)result}"
+	}
+
+	zpty_deinit
+}
+
 test_main() {
 	# Load zsh-async before running each test.
 	zmodload zsh/datetime
