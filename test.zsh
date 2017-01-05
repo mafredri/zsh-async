@@ -65,16 +65,24 @@ t_runner_init() {
 		done
 	}
 
+	_t_log() {
+		local trace=$1; shift
+		local -a lines indent
+		lines=("${(@f)@}")
+		indent=($'\t\t'${^lines[2,$#lines]})
+		print -u7 -lr - $'\t'"$trace: $lines[1]" ${(F)indent}
+	}
+
 	# t_log is for printing log output, visible in verbose (-v) mode.
 	t_log() {
 		local line=$funcfiletrace[1]
 		[[ ${line%:[0-9]*} = "" ]] && line=ztest:$functrace[1]  # Not from a file.
-		print -u7 $'\t'$line: $@
+		_t_log $line "$*"
 	}
 
 	# t_skip is for skipping a test.
 	t_skip() {
-		print -u7 $'\t'${funcfiletrace[1]}: $@
+		_t_log $funcfiletrace[1] "$*"
 		() { return 100 }
 		t_done
 	}
@@ -82,12 +90,12 @@ t_runner_init() {
 	# t_error logs the error and fails the test without aborting.
 	t_error() {
 		(( _test_errors++ ))
-		print -u7 $'\t'${funcfiletrace[1]}: $@
+		_t_log $funcfiletrace[1] "$*"
 	}
 
 	# t_fatal fails the test and halts execution immediately.
 	t_fatal() {
-		print -u7 $'\t'${funcfiletrace[1]}: $@
+		_t_log $funcfiletrace[1] "$*"
 		() { return 101 }
 		t_done
 	}
