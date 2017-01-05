@@ -67,19 +67,31 @@ test__async_job_multiple_commands() {
 	[[ $out[3] = "hi1 234" ]] || t_error "want output hi1 234, got " $out[3]
 }
 
+test_async_start_stop_worker() {
+	local out
+
+	async_start_worker test
+	out=$(zpty -L)
+	[[ $out =~ "test _async_worker" ]] || t_error "want zpty worker running, got ${(q-)out}"
+
+	async_stop_worker test || t_error "stop worker: want exit code 0, got $?"
+	out=$(zpty -L)
+	[[ -z $out ]] || t_error "want no zpty worker running, got ${(q-)out}"
+
+	async_stop_worker nonexistent && t_error "stop non-existent worker: want exit code 1, got $?"
+}
+
 test_async_job_multiple_commands_in_string() {
 	local -a result
 	cb() { result=("$@") }
 
 	async_start_worker test
 	async_job test 'print -n "hi  123 "; print -n bye'
-	while ! async_process_results test cb; do
-		sleep 0.05
-	done
+	while ! async_process_results test cb; do :; done
 	async_stop_worker test
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
-	[[ $result[3] = "hi  123 bye" ]] || t_error 'want output: "hi  123 bye", got' ${(qqq)result[3]}
+	[[ $result[3] = "hi  123 bye" ]] || t_error 'want output: "hi  123 bye", got' ${(q-)result[3]}
 }
 
 test_async_job_git_status() {
@@ -88,9 +100,7 @@ test_async_job_git_status() {
 
 	async_start_worker test
 	async_job test git status --porcelain
-	while ! async_process_results test cb; do
-		sleep 0.05
-	done
+	while ! async_process_results test cb; do :; done
 	async_stop_worker test
 
 	[[ $result[1] = git ]] || t_error "want command name: git, got" $result[1]
@@ -98,7 +108,7 @@ test_async_job_git_status() {
 
 	want=$(git status --porcelain)
 	got=$result[3]
-	[[ $got = $want ]] || t_error "want ${(qqq)want}, got ${(qqq)got}"
+	[[ $got = $want ]] || t_error "want ${(q-)want}, got ${(q-)got}"
 }
 
 test_async_job_multiple_arguments_and_spaces() {
@@ -107,16 +117,14 @@ test_async_job_multiple_arguments_and_spaces() {
 
 	async_start_worker test
 	async_job test print "hello   world"
-	while ! async_process_results test cb; do
-		sleep 0.05
-	done
+	while ! async_process_results test cb; do :; done
 	async_stop_worker test
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
 	[[ $result[2] = 0 ]] || t_error "want exit code: 0, got" $result[2]
 
 	[[ $result[3] = "hello   world" ]] || {
-		t_error "want output: \"hello   world\", got" ${(qqq)result[3]}
+		t_error "want output: \"hello   world\", got" ${(q-)result[3]}
 	}
 }
 
@@ -138,9 +146,7 @@ test_async_job_unique_worker() {
 	async_job test helper one
 	async_job test helper two
 
-	while ! async_process_results test cb; do
-		sleep 0.05
-	done
+	while ! async_process_results test cb; do :; done
 
 	# If both jobs were running but only one was complete,
 	# async_process_results() could've returned true for
@@ -153,7 +159,33 @@ test_async_job_unique_worker() {
 
 	# Ensure that cb was only called once with correc output.
 	[[ ${#result} = 5 ]] || t_error "result: want 5 elements, got" ${#result}
-	[[ $result[3] = one ]] || t_error "output: want \"one\", got" ${(qqq)result[3]}
+	[[ $result[3] = one ]] || t_error "output: want 'one', got" ${(q-)result[3]}
+}
+
+test_async_job_error_and_nonzero_exit() {
+	local -a r
+	cb() { r+=("$@") }
+	error() {
+		print "Errors!"
+		12345
+		54321
+		print "Done!"
+		exit 99
+	}
+
+	async_start_worker test
+	async_job test error
+
+	while ! async_process_results test cb; do :; done
+
+	[[ $r[1] = error ]] || t_error "want 'error', got ${(q-)r[1]}"
+	[[ $r[2] = 99 ]] || t_error "want exit code 99, got $r[2]"
+
+	want=$'Errors!\nDone!'
+	[[ $r[3] = $want ]] || t_error "want ${(q-)want}, got ${(q-)r[3]}"
+
+	want=$'.*command not found: 12345\n.*command not found: 54321'
+	[[ $r[5] =~ $want ]] || t_error "want ${(q-)want}, got ${(q-)r[5]}"
 }
 
 test_async_worker_notify_sigwinch() {
@@ -162,23 +194,68 @@ test_async_worker_notify_sigwinch() {
 
 	ASYNC_USE_ZLE_HANDLER=0
 
-	async_start_worker test -p $$ -n
+	async_start_worker test -n
 	async_register_callback test cb
 
 	async_job test 'sleep 0.1; print hi'
 
-	while (( ! $#result )); do
-		sleep 0.05
-	done
+	while (( ! $#result )); do sleep 0.01; done
 
 	async_stop_worker test
 
 	[[ $result[3] = hi ]] || t_error "expected output: hi, got" $result[3]
 }
 
+test_async_job_removes_nulls() {
+	local -a r
+	cb() { r=("$@") }
+	null_echo() {
+		print Hello$'\0' with$'\0' nulls!
+		print "Did we catch them all?"$'\0'
+		print $'\0'"What about the errors?"$'\0' 1>&2
+	}
+
+	async_start_worker test
+	async_job test null_echo
+
+	while ! async_process_results test cb; do :; done
+
+	async_stop_worker test
+
+	local want
+	want=$'Hello with nulls!\nDid we catch them all?'
+	[[ $r[3] = $want ]] || t_error stdout: want ${(q-)want}, got ${(q-)r[3]}
+	want='What about the errors?'
+	[[ $r[5] = $want ]] || t_error stderr: want ${(q-)want}, got ${(q-)r[5]}
+}
+
+test_async_flush_jobs() {
+	local -a r
+	cb() { r=("$@") }
+	many_procs() {
+		{ sleep 0.15 && print -n 1 } &
+		{ sleep 0.2 && print -n 2 } &
+		wait
+	}
+
+	async_start_worker test
+	async_job test many_procs
+
+	sleep 0.1
+
+	async_flush_jobs test
+
+	sleep 0.2
+	async_process_results test cb
+
+	async_stop_worker test
+
+	[[ $r[3] = "" ]] || t_error "stdout: want '', got ${(q-)r[3]}"
+}
+
 test_main() {
 	# Load zsh-async before running each test.
 	zmodload zsh/datetime
-	source async.zsh
+	. ./async.zsh
 	async_init
 }
