@@ -32,18 +32,14 @@ _async_job() {
 	unset stdout stderr ret
 	eval "$(
 		{
-			stdout=$(eval "$@")
+			stdout="$(eval "$@")"
 			ret=$?
 			typeset -p stdout ret
-		} 2> >(stderr=$(cat); typeset -p stderr)
+		} 2> >(stderr="$(cat)"; typeset -p stderr)
 	)"
 
 	# Calculate duration
 	duration=$(( EPOCHREALTIME - duration ))
-
-	# stip all null-characters from stdout and stderr
-	stdout=${stdout//$'\0'/}
-	stderr=${stderr//$'\0'/}
 
 	# if ret is missing for some unknown reason, set it to -1 to indicate we
 	# have run into a bug
@@ -52,8 +48,8 @@ _async_job() {
 	# Grab mutex lock, stalls until token is available
 	read -ep >/dev/null
 
-	# return output (<job_name> <return_code> <stdout> <duration> <stderr>)
-	print -r -N -n -- "$1" "$ret" "$stdout" "$duration" "$stderr"$'\0'
+	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>$'\0')
+	print -u3 -r -n -- "$1" "$ret" "${(q)stdout}" "$duration" "${(q)stderr}"$'\0'
 
 	# Unlock mutex by inserting a token
 	print -p "t"
@@ -117,13 +113,14 @@ _async_worker() {
 		esac
 	done
 
-	# Wait for jobs, a job request ends with a NULL character.
-	while read -r -d $'\0' line; do
-		# Copy command buffer, z splits the result
-		# into words using shell parsing.
-		typeset -a cmd
-		cmd=(${(z)line})
+	# Wait for jobs sent by async_job.
+	typeset -a cmd
+	while read -d $'\0' -r request; do
+		# Parse the request using shell parsing (z) to allow commands
+		# to be parsed from single strings and multi-args alike.
+		cmd=("${(z)request}")
 
+		# Name of the job (first argument).
 		local job=$cmd[1]
 
 		# Check for non-job commands sent to worker
@@ -163,8 +160,8 @@ _async_worker() {
 			print -p "t"
 		fi
 
-		# Run task in background
-		_async_job $cmd &
+		# Run job in background, disable stdout/stderr and use fd 3 for result.
+		_async_job $cmd 3>&1 1>/dev/null 2>&1 &
 		# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
 		storage[$job]="$!"
 
@@ -196,37 +193,27 @@ async_process_results() {
 	local -a items
 	local line
 
-	typeset -gA ASYNC_PROCESS_BUFFER
-	# Read output from zpty and parse it if available
-	while zpty -rt $worker line 2>/dev/null; do
-		# Remove unwanted \r from output
-		ASYNC_PROCESS_BUFFER[$worker]+=${line//$'\r'$'\n'/$'\n'}
-		# Split buffer on null characters, preserve empty elements
-		# (an anonymous function is used to avoid leaking modified IFS into the callback)
-		() {
-			local IFS=$'\0'
-			items=("${(@)=ASYNC_PROCESS_BUFFER[$worker]}")
-		}
-		# Remove last element since it's an artifact
-		# of the return string separator structure
-		items=("${(@)items[1,${#items}-1]}")
+	# Read output from zpty and parse it if available. Note that reading output
+	# from zpty with a pattern is limited to one megabyte, if the pattern is
+	# not encountered before the limit, the exit status will be non-zero.
+	while zpty -r -m -t $worker line \*$'\0'\* 2>/dev/null; do
+		line=${line[1,$#line-1]}        # Remove trailing NULL character.
+		line=${line//$'\r'$'\n'/$'\n'}  # Remove unwanted "\r" from output.
 
-		# Continue until we receive all information
-		(( ${#items} % 5 )) && continue
+		items=("${(@Q)${(z)line}}")
 
-		# Work through all results
-		while (( ${#items} > 0 )); do
-			$callback "${(@)items[1,5]}"
-			shift 5 items
-			count+=1
-		done
+		# Due to how zpty pattern matching works, we should not encounter
+		# this condition. However, we check it anyway as a precaution.
+		if (( ${#items} != 5 )); then
+			print -u2 $EPOCHREALTIME
+			print -u2 "zsh-async:error: expected 5 items, got ${#items} (${(qqqq)items})"
+			return 2
+		fi
 
-		# Empty the buffer
-		unset "ASYNC_PROCESS_BUFFER[$worker]"
+		$callback "${(@)items}"
+
+		return 0
 	done
-
-	# If we processed any results, return success
-	(( count )) && return 0
 
 	# Avoid printing exit value from setopt printexitvalue
 	[[ $caller = trap || $caller = watcher ]] && return 0
@@ -259,14 +246,13 @@ async_job() {
 	local worker=$1; shift
 
 	local -a cmd
-	cmd=($@)
+	cmd=("$@")
 	if [[ ${#cmd} -gt 1 ]]; then
-		# Quote special characters using minimal form
-		# of quoting in multi argument commands.
-		cmd=(${(q-)cmd})
+		# Quote special characters in multi argument commands.
+		cmd=(${(q)cmd})
 	fi
 
-	zpty -w $worker $cmd$'\0'
+	zpty -w $worker "$cmd"$'\0'
 }
 
 # This function traps notification signals and calls all registered callbacks
