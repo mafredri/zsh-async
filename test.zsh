@@ -6,7 +6,6 @@
 #
 emulate -L zsh
 
-
 zmodload zsh/datetime
 zmodload zsh/parameter
 zmodload zsh/zutil
@@ -44,7 +43,7 @@ parse_opts() {
 		exit 1
 	fi
 
-	[[ -n $1 ]] && TEST_GLOB=$1/
+	[[ -n $1 ]] && TEST_GLOB=$1
 	TEST_VERBOSE=$+verbose[1]
 	TEST_TRACE=$+trace[1]
 	ZTEST_DEBUG=$+debug[1]
