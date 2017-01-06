@@ -74,6 +74,7 @@ _async_worker() {
 	local notify_parent=0
 	local parent_pid=0
 	local coproc_pid=0
+	local processing=0
 
 	# Deactivate all zsh hooks inside the worker.
 	zsh_hooks=(chpwd periodic precmd preexec zshexit zshaddhistory)
@@ -83,10 +84,14 @@ _async_worker() {
 	unset $zsh_hook_functions
 
 	child_exit() {
+		local pids
+		pids=(${${(v)jobstates##*:*:}%\=*})
+
 		# If coproc (cat) is the only child running, we close it to avoid
 		# leaving it running indefinitely and cluttering the process tree.
-		if [[ ${#jobstates} = 1 ]] && [[ $coproc_pid = ${${(v)jobstates##*:*:}%\=*} ]]; then
+		if  (( ! processing )) && [[ $#pids = 1 ]] && [[ $coproc_pid = $pids[1] ]]; then
 			coproc :
+			coproc_pid=0
 		fi
 
 		# On older version of zsh (pre 5.2) we notify the parent through a
@@ -126,12 +131,11 @@ _async_worker() {
 			_unset_trap)
 				notify_parent=0; continue;;
 			_killjobs)
-				# Do nothing in the worker when receiving the TERM signal
-				trap '' TERM
-				# Send TERM to the entire process group (PID and all children)
-				kill -TERM -$$ &>/dev/null
-				# Reset trap
-				trap - TERM
+				trap '' TERM    # Capture SIGTERM.
+				kill -TERM -$$  # Send to entire process group.
+				trap - TERM     # Reset local trap.
+				coproc :        # Quit coproc.
+				coproc_pid=0    # Reset pid.
 				continue
 				;;
 		esac
@@ -146,12 +150,15 @@ _async_worker() {
 			done
 		fi
 
+		# Guard against closing coproc from trap before command has started.
+		processing=1
+
 		# Because we close the coproc after the last job has completed, we must
 		# recreate it when there are no other jobs running.
-		if (( !${#jobstates} )); then
+		if (( ! coproc_pid )); then
 			# Use coproc as a mutex for synchronized output between children.
 			coproc cat
-			coproc_pid=$!
+			coproc_pid="$!"
 			# Insert token into coproc
 			print -p "t"
 		fi
@@ -160,6 +167,8 @@ _async_worker() {
 		_async_job $cmd &
 		# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
 		storage[$job]="$!"
+
+		processing=0  # Disable guard.
 	done
 }
 
