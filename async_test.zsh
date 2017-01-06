@@ -4,9 +4,12 @@ test__async_job_print_hi() {
 	coproc cat
 	print -p t  # Insert token into coproc.
 
-	local IFS=$'\0'  # Split on NULLs.
-	local out
-	out=($(_async_job print hi))
+	local line
+	local -a out
+	line=$(_async_job print hi 3>&1)
+	# Remove trailing null, parse, unquote and interpret as array.
+	line=$line[1,$#line-1]
+	out=("${(@Q)${(z)line}}")
 
 	coproc exit
 
@@ -19,9 +22,12 @@ test__async_job_stderr() {
 	coproc cat
 	print -p t  # Insert token into coproc.
 
-	local IFS=$'\0'  # Split on NULLs.
-	local out
-	out=($(_async_job 'print hi 1>&2'))
+	local line
+	local -a out
+	line=$(_async_job print 'hi 1>&2' 3>&1)
+	# Remove trailing null, parse, unquote and interpret as array.
+	line=$line[1,$#line-1]
+	out=("${(@Q)${(z)line}}")
 
 	coproc exit
 
@@ -34,7 +40,7 @@ test__async_job_wait_for_token() {
 	float start duration
 	coproc cat
 
-	_async_job print hi >/dev/null &
+	_async_job print hi >/dev/null 3>&1 &
 	job=$!
 	start=$EPOCHREALTIME
 	{
@@ -55,9 +61,12 @@ test__async_job_multiple_commands() {
 	coproc cat
 	print -p t
 
-	local IFS=$'\0'  # Split on NULLs.
-	local out
-	out=($(_async_job 'print -n hi; for i in "1 2" 3 4; do print -n $i; done'))
+	local line
+	local -a out
+	line="$(_async_job print '-n hi; for i in "1 2" 3 4; do print -n $i; done' 3>&1)"
+	# Remove trailing null, parse, unquote and interpret as array.
+	line=$line[1,$#line-1]
+	out=("${(@Q)${(z)line}}")
 
 	coproc exit
 
@@ -81,12 +90,107 @@ test_async_start_stop_worker() {
 	async_stop_worker nonexistent && t_error "stop non-existent worker: want exit code 1, got $?"
 }
 
+test_async_process_results() {
+	local -a r
+	cb() { r+=("$@") }
+
+	async_start_worker test
+	t_defer async_stop_worker test
+
+	async_process_results test cb  # No results.
+	ret=$?
+	(( ret == 1 )) || t_error "want exit code 1, got $ret"
+
+	async_job test print -n hi
+	while ! async_process_results test cb; do :; done
+	(( $#r == 5 )) || t_error "want one result, got $(( $#r % 5 ))"
+	shift 5 r
+
+	# Perform some stress testing.
+	integer iter=150 timeout=10
+	for i in {1..$iter}; do
+		async_job test "print -n $i"
+
+		# TODO: Figure out how we can remove sleep & process here.
+
+		# If we do not sleep here, we end up losing some of the commands sent to
+		# async_job (~90 get sent). This could possibly be due to the zpty
+		# buffer being full (see below).
+		sleep 0.00001
+		# Without processing resuls we occasionally run into 'print -n 39'
+		# failing due to the command name and exit status missing. Sample output
+		# from processing for 39 (stdout, time, stderr):
+		#   $'39 0.0056798458 '
+		# This is again, probably due to the zpty buffer being full, we only
+		# need to ensure that not too many commands are run before we process.
+		(( iter % 25 == 0 )) && async_process_results test cb
+	done
+
+	float start=$EPOCHSECONDS
+
+	while (( $#r / 5 < iter )); do
+		async_process_results test cb
+		(( EPOCHSECONDS - start > timeout )) && {
+			t_error "timed out after ${timeout}s"
+			t_fatal "wanted $iter results, got $(( $#r / 5 ))"
+		}
+	done
+
+	local -a stdouts
+	while (( $#r > 0 )); do
+		[[ $r[1] = print ]] || t_error "want 'print', got ${(q-)r[1]}"
+		[[ $r[2] = 0 ]] || t_error "want exit 0, got $r[2]"
+		stdouts+=($r[3])
+		[[ -z $r[5] ]] || t_error "want no stderr, got ${(q-)r[5]}"
+		shift 5 r
+	done
+
+	local got want
+	# Check that we received all numbers.
+	got=(${(on)stdouts})
+	want=({1..$iter})
+	[[ $want = $got ]] || t_error "want stdout: ${(q-)want}, got ${(q-)got}"
+
+	# Test with longer running commands (sleep, then print).
+	iter=50
+	for i in {1..$iter}; do
+		async_job test "sleep 1 && print -n $i"
+		sleep 0.00001
+		(( iter % 25 == 0 )) && async_process_results test cb
+	done
+
+	start=$EPOCHSECONDS
+
+	while (( $#r / 5 < iter )); do
+		async_process_results test cb
+		(( EPOCHSECONDS - start > timeout )) && {
+			t_error "timed out after ${timeout}s"
+			t_fatal "wanted $iter results, got $(( $#r / 5 ))"
+		}
+	done
+
+	stdouts=()
+	while (( $#r > 0 )); do
+		[[ $r[1] = sleep ]] || t_error "want 'sleep', got ${(q-)r[1]}"
+		[[ $r[2] = 0 ]] || t_error "want exit 0, got $r[2]"
+		stdouts+=($r[3])
+		[[ -z $r[5] ]] || t_error "want no stderr, got ${(q-)r[5]}"
+		shift 5 r
+	done
+
+	# Check that we received all numbers.
+	got=(${(on)stdouts})
+	want=({1..$iter})
+	[[ $want = $got ]] || t_error "want stdout: ${(q-)want}, got ${(q-)got}"
+}
+
 test_async_job_multiple_commands_in_string() {
 	local -a result
 	cb() { result=("$@") }
 
 	async_start_worker test
-	async_job test 'print -n "hi  123 "; print -n bye'
+	# Test multi-line (single string) command.
+	async_job test $'print -n "hi  123 "\nprint -n bye'
 	while ! async_process_results test cb; do :; done
 	async_stop_worker test
 
@@ -206,7 +310,7 @@ test_async_worker_notify_sigwinch() {
 	[[ $result[3] = hi ]] || t_error "expected output: hi, got" $result[3]
 }
 
-test_async_job_removes_nulls() {
+test_async_job_keeps_nulls() {
 	local -a r
 	cb() { r=("$@") }
 	null_echo() {
@@ -223,40 +327,61 @@ test_async_job_removes_nulls() {
 	async_stop_worker test
 
 	local want
-	want=$'Hello with nulls!\nDid we catch them all?'
+	want=$'Hello\0 with\0 nulls!\nDid we catch them all?\0'
 	[[ $r[3] = $want ]] || t_error stdout: want ${(q-)want}, got ${(q-)r[3]}
-	want='What about the errors?'
+	want=$'\0What about the errors?\0'
 	[[ $r[5] = $want ]] || t_error stderr: want ${(q-)want}, got ${(q-)r[5]}
 }
 
 test_async_flush_jobs() {
 	local -a r
-	cb() { r=("$@") }
-	many_procs() {
-		{ sleep 0.15 && print -n 1 } &
-		{ sleep 0.2 && print -n 2 } &
-		wait
+	cb() { r=+("$@") }
+
+	print_four() { print -n 4 }
+	print_123_delayed_exit() {
+		print -n 1
+		{ sleep 0.15 && print -n 2 } &!
+		{ sleep 0.2 && print -n 3 } &!
 	}
 
 	async_start_worker test
-	async_job test many_procs
 
+	# Start a job that prints 1 and starts two disowned child processes that
+	# print 2 and 3, respectively, after a timeout. The job will not exit
+	# immediately (and thus print 1) because the child processes are still
+	# running.
+	async_job test print_123_delayed_exit
+
+	# Check that the job is waiting for the child processes.
+	sleep 0.05
+	async_process_results test cb
+	(( $#r == 0 )) || t_error "want no output, got ${(q-)r}"
+
+	# Start a job that prints four, it will produce
+	# output but we will not process it.
+	async_job test print_four
 	sleep 0.1
 
-	async_flush_jobs test
+	# Flush jobs, this kills running jobs and discards unprocessed results.
+	# TODO: Confirm that they no longer exist in the process tree.
+	local output
+	output="${(Q)$(ASYNC_DEBUG=1 async_flush_jobs test)}"
+	[[ $output = *'print_four 0 4'* ]] || {
+		t_error "want discarded output 'print_four 0 4' when ASYNC_DEBUG=1, got ${(q-)output}"
+	}
 
-	sleep 0.2
+	# Check that the killed job did not produce output.
+	sleep 0.1
 	async_process_results test cb
+	(( $#r == 0 )) || t_error "want no output, got ${(q-)r}"
 
 	async_stop_worker test
-
-	[[ $r[3] = "" ]] || t_error "stdout: want '', got ${(q-)r[3]}"
 }
 
 zpty_init() {
 	zmodload zsh/zpty
 
-	export PS1='<PROMPT>'
+	export PS1="<PROMPT>"
 	zpty zsh 'zsh -f +Z'
 	zpty -r zsh zpty_init1 "*<PROMPT>*" || {
 		t_log "initial prompt missing"
@@ -299,39 +424,27 @@ test_zle_watcher() {
 
 		. "'$PWD'/async.zsh"
 		async_init
+
 		print_result_cb() { print ${(q-)@} }
+		async_start_worker test
+		async_register_callback test print_result_cb
 	' || {
 		zpty_deinit
 		t_fatal "failed to init zpty"
 	}
 
-	zpty_run async_start_worker test || {
-		zpty_deinit
-		t_fatal "could not start async worker"
-	}
-
-	zpty_run async_register_callback test print_result_cb || {
-		zpty_deinit
-		t_fatal "could not register callback"
-	}
+	t_defer zpty_deinit  # Deinit after test completion.
 
 	zpty -w zsh "zle -F"
 	zpty -r -m zsh result "*_async_zle_watcher*" || {
-		zpty_deinit
 		t_fatal "want _async_zle_watcher to be registered as zle watcher, got output ${(q-)result}"
 	}
 
-	zpty_run async_job test 'print hello world' || {
-		zpty_deinit
-		t_fatal "could not send async_job command"
-	}
+	zpty_run async_job test 'print hello world' || t_fatal "could not send async_job command"
 
 	zpty -r -m zsh result "*print 0 'hello world'*" || {
-		zpty_deinit
 		t_fatal "want \"print 0 'hello world'\", got output ${(q-)result}"
 	}
-
-	zpty_deinit
 }
 
 test_main() {

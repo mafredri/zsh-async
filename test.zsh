@@ -58,6 +58,7 @@ t_runner_init() {
 	# _t_runner is the main loop that waits for tests,
 	# used to abort test execution by exec.
 	_t_runner() {
+		local -a _test_defer_funcs
 		integer _test_errors=0
 		while read -r; do
 			eval "$REPLY"
@@ -99,6 +100,12 @@ t_runner_init() {
 		t_done
 	}
 
+	# t_defer takes a function (and optionally, arguments)
+	# to be executed after the test has completed.
+	t_defer() {
+		_test_defer_funcs+=("$*")
+	}
+
 	# t_done completes the test execution, called automatically after a test.
 	# Can also be called manually when the test is done.
 	t_done() {
@@ -106,6 +113,9 @@ t_runner_init() {
 		(( _test_errors )) && ret=101
 
 		(( w )) && wait    # Wait for test children to exit.
+		for d in $_test_defer_funcs; do
+			eval "$d"
+		done
 		print -n -u8 $ret  # Send exit code to ztest.
 		exec _t_runner     # Replace shell, wait for new test.
 	}
@@ -183,10 +193,10 @@ run_test_module() {
 		done
 
 		case $test_exit in
-			0) state=PASS;;
-			101|102) state=FAIL; mod_exit=1;;
-			100) state=SKIP;;
-			*) state=UNKN;;
+			(0|1) state=PASS;;
+			(100) state=SKIP;;
+			(101|102) state=FAIL; mod_exit=1;;
+			*) state="????";;
 		esac
 
 		if [[ $state = FAIL ]] || (( TEST_VERBOSE )); then
