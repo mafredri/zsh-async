@@ -8,6 +8,9 @@
 # url: https://github.com/mafredri/zsh-async
 #
 
+# Produce debug output from zsh-async when set to 1.
+ASYNC_DEBUG=${ASYNC_DEBUG:-0}
+
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
 	# Disable xtrace as it would mangle the output.
@@ -309,11 +312,14 @@ async_flush_jobs() {
 	async_job $worker "_killjobs"
 
 	# Clear all output buffers
-	while zpty -r $worker line; do true; done
-
-	# Clear any partial buffers
-	typeset -gA ASYNC_PROCESS_BUFFER
-	unset "ASYNC_PROCESS_BUFFER[$worker]"
+	local junk
+	if zpty -r -t $worker junk '*'; then
+		(( ASYNC_DEBUG )) && print -n "async_flush_jobs $worker: ${(V)junk}"
+		while zpty -r -t $worker junk '*'; do
+			(( ASYNC_DEBUG )) && print -n "${(V)junk}"
+		done
+		(( ASYNC_DEBUG )) && print
+	fi
 }
 
 #
