@@ -61,6 +61,14 @@ _async_job() {
 
 # The background worker manages all tasks and runs them without interfering with other processes
 _async_worker() {
+	# Reset all options to defaults inside async worker.
+	emulate -R zsh
+
+	# Redirect stderr to /dev/null in case unforseen
+	# errors produced by the worker. For example:
+	#   fork failed: resource temporarily unavailable.
+	exec 2>/dev/null
+
 	local -A storage
 	local unique=0
 	local notify_parent=0
