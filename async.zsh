@@ -416,11 +416,12 @@ async_init() {
 	zmodload zsh/zpty
 	zmodload zsh/datetime
 
-	# Check if zsh/zpty returns a file descriptor or not, shell must also be interactive
+	# Check if zsh/zpty returns a file descriptor or not,
+	# shell must also be interactive with zle enabled.
 	ASYNC_USE_ZLE_HANDLER=0
-	[[ -o interactive ]] && {
+	[[ -o interactive ]] && [[ -o zle ]] && {
 		typeset -h REPLY
-		zpty _async_test cat
+		zpty _async_test :
 		(( REPLY )) && ASYNC_USE_ZLE_HANDLER=1
 		zpty -d _async_test
 	}
