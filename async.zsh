@@ -46,13 +46,13 @@ _async_job() {
 	ret=${ret:--1}
 
 	# Grab mutex lock, stalls until token is available
-	read -ep >/dev/null
+	read -k 1 -p -r tok
 
 	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>$'\0')
 	print -u3 -r -n -- "$1" "$ret" "${(q)stdout}" "$duration" "${(q)stderr}"$'\0'
 
 	# Unlock mutex by inserting a token
-	print -p "t"
+	print -n -p $tok
 }
 
 # The background worker manages all tasks and runs them without interfering with other processes
@@ -157,7 +157,7 @@ _async_worker() {
 			coproc cat
 			coproc_pid="$!"
 			# Insert token into coproc
-			print -p "t"
+			print -n -p "t"
 		fi
 
 		# Run job in background, disable stdout/stderr and use fd 3 for result.
