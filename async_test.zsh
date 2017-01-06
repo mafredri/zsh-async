@@ -388,15 +388,11 @@ zpty_init() {
 		return 1
 	}
 
-	tmp=$(mktemp -t async_test_zpty_init.XXXXXX)
-	print -lr - "$@" > $tmp
-	zpty -w zsh ". '$tmp'"
+	zpty -w zsh "{ $@ }"
 	zpty -r -m zsh zpty_init2 "*<PROMPT>*" || {
 		t_log "prompt missing"
-		rm $tmp
 		return 1
 	}
-	rm $tmp
 }
 
 zpty_run() {
