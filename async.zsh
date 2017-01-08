@@ -19,45 +19,26 @@ _async_job() {
 	# Store start time as double precision (+E disables scientific notation)
 	float -F duration=$EPOCHREALTIME
 
-	# Run the command
-	#
-	# Store stdout, stderr and exit code in variables. We use a total of three
-	# subshells to capture all output, one for the stdout, another for stderr
-	# and the third (the outer most) for capturing everything inside _async_job.
-	# To receive the values inside _async_job we use shell quoting (q) to quote
-	# the values and print them as `var=quoted_var`. This is then evaluated to
-	# become a true assignment in _async_job.
-	#
-	# Example (git status --porcelain):
-	# 	eval "
-	# 		stdout=\ M\ async_test.zsh$'\n'\ M\ async.zsh
-	# 		ret=0
-	# 		stderr=
-	# 	"
-	unset stdout stderr ret
-	eval "$(
-		{
-			stdout=$(eval "$@")
-			ret=$?
-			print -r - stdout=${(q)stdout}
-			print -r - ret=$ret
-		} 2> >(stderr=$(cat); print -r - stderr=${(q)stderr})
-	)"
+	# Run the command and capture both stdout (`eval`) and stderr (`cat`) in
+	# separate subshells. When the command is complete, we grab write lock
+	# (mutex token) and output everything except stderr inside the command
+	# block, after the command block has completed, the stdin for `cat` is
+	# closed, causing stderr to be appended with a $'\0' at the end to mark the
+	# end of output from this job.
+	local stdout stderr ret tok
+	{
+		stdout=$(eval "$@")
+		ret=$?
+		duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
-	# Calculate duration
-	duration=$(( EPOCHREALTIME - duration ))
+		# Grab mutex lock, stalls until token is available.
+		read -k 1 -p -r tok
 
-	# if ret is missing for some unknown reason, set it to -1 to indicate we
-	# have run into a bug
-	ret=${ret:--1}
+		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
+		print -r -n - ${(q)1} $ret ${(q)stdout} $duration
+	} 2> >(stderr=$(cat); print -r -n - " "${(q)stderr}$'\0')
 
-	# Grab mutex lock, stalls until token is available
-	read -k 1 -p -r tok
-
-	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>)
-	print -r -n - "${(q)1}" "$ret" "${(q)stdout}" "$duration" "${(q)stderr}"$'\0'
-
-	# Unlock mutex by inserting a token
+	# Unlock mutex by inserting a token.
 	print -n -p $tok
 }
 
