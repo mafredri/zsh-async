@@ -21,21 +21,27 @@ _async_job() {
 
 	# Run the command
 	#
-	# What is happening here is that we are assigning stdout, stderr and ret to
-	# variables, and then we are printing out the variable assignment through
-	# typeset -p. This way when we run eval we get something along the lines of:
+	# Store stdout, stderr and exit code in variables. We use a total of three
+	# subshells to capture all output, one for the stdout, another for stderr
+	# and the third (the outer most) for capturing everything inside _async_job.
+	# To receive the values inside _async_job we use shell quoting (q) to quote
+	# the values and print them as `var=quoted_var`. This is then evaluated to
+	# become a true assignment in _async_job.
+	#
+	# Example (git status --porcelain):
 	# 	eval "
-	# 		typeset stdout=' M async.test.sh\n M async.zsh'
-	# 		typeset ret=0
-	# 		typeset stderr=''
+	# 		stdout=\ M\ async_test.zsh$'\n'\ M\ async.zsh
+	# 		ret=0
+	# 		stderr=
 	# 	"
 	unset stdout stderr ret
 	eval "$(
 		{
-			stdout="$(eval "$@")"
+			stdout=$(eval "$@")
 			ret=$?
-			typeset -p stdout ret
-		} 2> >(stderr="$(cat)"; typeset -p stderr)
+			print -r - stdout=${(q)stdout}
+			print -r - ret=$ret
+		} 2> >(stderr=$(cat); print -r - stderr=${(q)stderr})
 	)"
 
 	# Calculate duration
