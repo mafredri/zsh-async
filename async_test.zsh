@@ -417,8 +417,10 @@ test_async_worker_survives_termination_of_other_worker() {
 	async_start_worker test2
 	async_stop_worker test2
 
-	integer start=$EPOCHSECONDS
-	while (( EPOCHSECONDS - start < 1 )); do
+	async_job test1 print hi
+
+	integer start=$EPOCHREALTIME
+	while (( EPOCHREALTIME - start < 1 )); do
 		async_process_results test1 cb && break
 	done
 
