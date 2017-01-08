@@ -426,11 +426,11 @@ async_stop_worker() {
 		done
 		async_unregister_callback $worker
 		zpty -d $worker 2>/dev/null || ret=$?
-	done
 
-	# Clear any partial buffers.
-	typeset -gA ASYNC_PROCESS_BUFFER
-	unset "ASYNC_PROCESS_BUFFER[$worker]"
+		# Clear any partial buffers.
+		typeset -gA ASYNC_PROCESS_BUFFER
+		unset "ASYNC_PROCESS_BUFFER[$worker]"
+	done
 
 	return $ret
 }
