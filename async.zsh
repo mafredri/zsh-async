@@ -54,8 +54,8 @@ _async_job() {
 	# Grab mutex lock, stalls until token is available
 	read -k 1 -p -r tok
 
-	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>$'\0')
-	print -u3 -r -n -- "$1" "$ret" "${(q)stdout}" "$duration" "${(q)stderr}"$'\0'
+	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>)
+	print -r -n - "${(q)1}" "$ret" "${(q)stdout}" "$duration" "${(q)stderr}"$'\0'
 
 	# Unlock mutex by inserting a token
 	print -n -p $tok
@@ -166,8 +166,9 @@ _async_worker() {
 			print -n -p "t"
 		fi
 
-		# Run job in background, disable stdout/stderr and use fd 3 for result.
-		_async_job $cmd 3>&1 1>/dev/null 2>&1 &
+		# Run job in background, disable stderr for _async_job to avoid
+		# accidental output corruption. Completed jobs are printed to stdout.
+		_async_job $cmd 2>/dev/null &
 		# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
 		storage[$job]="$!"
 
