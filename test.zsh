@@ -4,12 +4,13 @@
 # Checks for test files named *_test.zsh or *_test.sh and runs all functions
 # named test_*.
 #
-emulate -L zsh
+emulate -R zsh
 
 zmodload zsh/datetime
 zmodload zsh/parameter
 zmodload zsh/zutil
 zmodload zsh/system
+zmodload zsh/zselect
 
 TEST_GLOB=.
 TEST_RUN=
@@ -180,16 +181,25 @@ run_test_module() {
 
 		# Start the test.
 		syswrite -o $cmdoutfd "$test; t_done"$'\n'
-		sysread -i $doneinfd  # Wait for message on done channel.
 
-		# Store the test execution time.
-		test_time=$(( EPOCHREALTIME - test_start ))
-		test_exit=$REPLY  # Store reply from sysread
-
-		# Read all output from the test output channel.
 		test_out=
-		while sysread -i $infd -t 0; do
-			test_out+=$REPLY
+		test_exit=-1
+		while (( test_exit == -1 )); do
+			# Block until there is data to be read.
+			zselect -r $doneinfd -r $infd
+
+			if [[ $reply[2] = $doneinfd ]]; then
+				sysread -i $doneinfd
+				test_exit=$REPLY  # Store reply from sysread
+				# Store the test execution time.
+				test_time=$(( EPOCHREALTIME - test_start ))
+			fi
+
+			# Read all output from the test output channel.
+			while sysread -i $infd -t 0; do
+				test_out+=$REPLY
+				unset REPLY
+			done
 		done
 
 		case $test_exit in
@@ -200,7 +210,7 @@ run_test_module() {
 		esac
 
 		if [[ $state = FAIL ]] || (( TEST_VERBOSE )); then
-			printf -- "--- $state: $test (%.2f)\n" $test_time
+			printf -- "--- $state: $test (%.2fs)\n" $test_time
 			print -n $test_out
 		fi
 	done
