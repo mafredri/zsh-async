@@ -91,12 +91,12 @@ _async_worker() {
 	local coproc_pid=0
 	local processing=0
 
-	# Deactivate all zsh hooks inside the worker.
+	local -a zsh_hooks zsh_hook_functions
 	zsh_hooks=(chpwd periodic precmd preexec zshexit zshaddhistory)
-	unfunction $zsh_hooks &>/dev/null
-	# And hooks with registered functions.
-	zsh_hook_functions=( ${^zsh_hooks}_functions )
-	unset $zsh_hook_functions
+	zsh_hook_functions=(${^zsh_hooks}_functions)
+	unfunction $zsh_hooks &>/dev/null   # Deactivate all zsh hooks inside the worker.
+	unset $zsh_hook_functions           # And hooks with registered functions.
+	unset zsh_hooks zsh_hook_functions  # Cleanup.
 
 	child_exit() {
 		local pids
