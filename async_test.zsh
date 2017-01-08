@@ -409,6 +409,22 @@ test_async_flush_jobs() {
 	async_stop_worker test
 }
 
+test_async_worker_survives_termination_of_other_worker() {
+	local -a result
+	cb() { result+=("$@") }
+
+	async_start_worker test1
+	async_start_worker test2
+	async_stop_worker test2
+
+	integer start=$EPOCHSECONDS
+	while (( EPOCHSECONDS - start < 1 )); do
+		async_process_results test1 cb && break
+	done
+
+	(( $#result == 5 )) || t_error "wanted a result, got (${(@Vq)result})"
+}
+
 zpty_init() {
 	zmodload zsh/zpty
 

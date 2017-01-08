@@ -76,6 +76,14 @@ _async_worker() {
 	# on at least zsh 5.0.2).
 	exec 2>/dev/null
 
+	# When a zpty is deleted (using -d) all other zpty instances created before
+	# the one being deleted get sent SIGHUP, unless we catch it, the async
+	# worker would simply stop working although appearing in the list of zpty's
+	# (zpty -L).
+	TRAPHUP() {
+		return 0  # Return 0, indicating signal was handled.
+	}
+
 	local -A storage
 	local unique=0
 	local notify_parent=0
