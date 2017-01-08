@@ -125,10 +125,19 @@ test_async_process_results() {
 	async_job test print -n hi
 	while ! async_process_results test cb; do :; done
 	(( $#r == 5 )) || t_error "want one result, got $(( $#r % 5 ))"
-	shift 5 r
+}
 
-	# Perform some stress testing.
-	integer iter=150 timeout=10
+test_async_process_results_stress() {
+	# NOTE: This stress test does not always pass properly on older versions of
+	# zsh, sometimes writing to zpty can hang and other times reading can hang,
+	# etc.
+	local -a r
+	cb() { r+=("$@") }
+
+	async_start_worker test
+	t_defer async_stop_worker test
+
+	integer iter=40 timeout=5
 	for i in {1..$iter}; do
 		async_job test "print -n $i"
 
@@ -144,7 +153,7 @@ test_async_process_results() {
 		#   $'39 0.0056798458 '
 		# This is again, probably due to the zpty buffer being full, we only
 		# need to ensure that not too many commands are run before we process.
-		(( iter % 25 == 0 )) && async_process_results test cb
+		(( iter % 5 == 0 )) && async_process_results test cb
 	done
 
 	float start=$EPOCHSECONDS
@@ -152,17 +161,17 @@ test_async_process_results() {
 	while (( $#r / 5 < iter )); do
 		async_process_results test cb
 		(( EPOCHSECONDS - start > timeout )) && {
-			t_error "timed out after ${timeout}s"
+			t_log "timed out after ${timeout}s"
 			t_fatal "wanted $iter results, got $(( $#r / 5 ))"
 		}
 	done
 
 	local -a stdouts
 	while (( $#r > 0 )); do
-		[[ $r[1] = print ]] || t_error "want 'print', got ${(q-)r[1]}"
+		[[ $r[1] = print ]] || t_error "want 'print', got ${(Vq-)r[1]}"
 		[[ $r[2] = 0 ]] || t_error "want exit 0, got $r[2]"
 		stdouts+=($r[3])
-		[[ -z $r[5] ]] || t_error "want no stderr, got ${(q-)r[5]}"
+		[[ -z $r[5] ]] || t_error "want no stderr, got ${(Vq-)r[5]}"
 		shift 5 r
 	done
 
@@ -170,14 +179,14 @@ test_async_process_results() {
 	# Check that we received all numbers.
 	got=(${(on)stdouts})
 	want=({1..$iter})
-	[[ $want = $got ]] || t_error "want stdout: ${(q-)want}, got ${(q-)got}"
+	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}"
 
 	# Test with longer running commands (sleep, then print).
-	iter=50
+	iter=40
 	for i in {1..$iter}; do
 		async_job test "sleep 1 && print -n $i"
 		sleep 0.00001
-		(( iter % 25 == 0 )) && async_process_results test cb
+		(( iter % 5 == 0 )) && async_process_results test cb
 	done
 
 	start=$EPOCHSECONDS
@@ -185,24 +194,24 @@ test_async_process_results() {
 	while (( $#r / 5 < iter )); do
 		async_process_results test cb
 		(( EPOCHSECONDS - start > timeout )) && {
-			t_error "timed out after ${timeout}s"
+			t_log "timed out after ${timeout}s"
 			t_fatal "wanted $iter results, got $(( $#r / 5 ))"
 		}
 	done
 
 	stdouts=()
 	while (( $#r > 0 )); do
-		[[ $r[1] = sleep ]] || t_error "want 'sleep', got ${(q-)r[1]}"
+		[[ $r[1] = sleep ]] || t_error "want 'sleep', got ${(Vq-)r[1]}"
 		[[ $r[2] = 0 ]] || t_error "want exit 0, got $r[2]"
 		stdouts+=($r[3])
-		[[ -z $r[5] ]] || t_error "want no stderr, got ${(q-)r[5]}"
+		[[ -z $r[5] ]] || t_error "want no stderr, got ${(Vq-)r[5]}"
 		shift 5 r
 	done
 
 	# Check that we received all numbers.
 	got=(${(on)stdouts})
 	want=({1..$iter})
-	[[ $want = $got ]] || t_error "want stdout: ${(q-)want}, got ${(q-)got}"
+	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}"
 }
 
 test_async_job_multiple_commands_in_multiline_string() {
