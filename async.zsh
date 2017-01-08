@@ -198,36 +198,46 @@ _async_worker() {
 async_process_results() {
 	setopt localoptions noshwordsplit
 
-	integer count=0
 	local worker=$1
 	local callback=$2
 	local caller=$3
 	local -a items
-	local line
+	local null=$'\0' data len pos
+	integer num_processed
 
-	# Read output from zpty and parse it if available. Note that reading output
-	# from zpty with a pattern is limited to one megabyte, if the pattern is
-	# not encountered before the limit, the exit status will be non-zero.
-	while zpty -r -m -t $worker line \*$'\0'\* 2>/dev/null; do
-		line=${line[1,$#line-1]}        # Remove trailing NULL character.
-		line=${line//$'\r'$'\n'/$'\n'}  # Remove unwanted "\r" from output.
+	typeset -gA ASYNC_PROCESS_BUFFER
 
-		items=("${(@Q)${(z)line}}")
+	# Read output from zpty and parse it if available.
+	while zpty -r -t $worker data '*' 2>/dev/null; do
+		ASYNC_PROCESS_BUFFER[$worker]+=$data
+		len=${#ASYNC_PROCESS_BUFFER[$worker]}
+		pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
 
-		# Due to how zpty pattern matching works, we should not encounter
-		# this condition. However, we check it anyway as a precaution.
-		if (( ${#items} != 5 )); then
-			print -u2 $EPOCHREALTIME
-			print -u2 "zsh-async:error: expected 5 items, got ${#items} (${(qqqq)items})"
-			return 2
+		# Keep going until we find a NULL-character.
+		if (( ! len )) || (( pos > len )); then
+			continue
 		fi
 
-		$callback "${(@)items}"
+		# Take the content from the beginning, until the NULL-character and
+		# perform shell parsing (z) and unquoting (Q) as an array (@).
+		items=("${(@Q)${(z)ASYNC_PROCESS_BUFFER[$worker][1,$pos-1]}}")
 
-		return 0
+		# Remove the extracted items from the buffer.
+		ASYNC_PROCESS_BUFFER[$worker]=${ASYNC_PROCESS_BUFFER[$worker][$pos+1,$len]}
+
+		# We should never encounter this condition,
+		# but we check for it anyway (just in case).
+		if (( $#items != 5 )); then
+			print -u2 - "$0:$LINENO: error: bad format, got ${#items} items (${(@q)items})"
+		fi
+
+		$callback "${(@)items}"  # Send all parsed items to the callback.
+		(( num_processed++ ))
 	done
 
-	# Avoid printing exit value from setopt printexitvalue
+	(( num_processed )) && return 0
+
+	# Avoid printing exit value when `setopt printexitvalue` is active.`
 	[[ $caller = trap || $caller = watcher ]] && return 0
 
 	# No results were processed
@@ -259,12 +269,11 @@ async_job() {
 
 	local -a cmd
 	cmd=("$@")
-	if [[ ${#cmd} -gt 1 ]]; then
-		# Quote special characters in multi argument commands.
-		cmd=(${(q)cmd})
+	if (( $#cmd > 1 )); then
+		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 	fi
 
-	zpty -w $worker "$cmd"$'\0'
+	zpty -w $worker $cmd$'\0'
 }
 
 # This function traps notification signals and calls all registered callbacks
@@ -326,7 +335,7 @@ async_flush_jobs() {
 	# Send kill command to worker
 	async_job $worker "_killjobs"
 
-	# Clear all output buffers
+	# Clear the zpty buffer.
 	local junk
 	if zpty -r -t $worker junk '*'; then
 		(( ASYNC_DEBUG )) && print -n "async_flush_jobs $worker: ${(V)junk}"
@@ -335,6 +344,10 @@ async_flush_jobs() {
 		done
 		(( ASYNC_DEBUG )) && print
 	fi
+
+	# Finally, clear the process buffer in case of partially parsed responses.
+	typeset -gA ASYNC_PROCESS_BUFFER
+	unset "ASYNC_PROCESS_BUFFER[$worker]"
 }
 
 #
@@ -411,6 +424,10 @@ async_stop_worker() {
 		async_unregister_callback $worker
 		zpty -d $worker 2>/dev/null || ret=$?
 	done
+
+	# Clear any partial buffers.
+	typeset -gA ASYNC_PROCESS_BUFFER
+	unset "ASYNC_PROCESS_BUFFER[$worker]"
 
 	return $ret
 }
