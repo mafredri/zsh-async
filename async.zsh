@@ -66,9 +66,14 @@ _async_worker() {
 	# Reset all options to defaults inside async worker.
 	emulate -R zsh
 
-	# Redirect stderr to /dev/null in case unforseen
-	# errors produced by the worker. For example:
-	#   fork failed: resource temporarily unavailable.
+	# Make sure monitor is unset to avoid printing the
+	# pids of child processes.
+	unsetopt monitor
+
+	# Redirect stderr to `/dev/null` in case unforseen errors produced by the
+	# worker. For example: `fork failed: resource temporarily unavailable`.
+	# Some older versions of zsh might also print malloc errors (know to happen
+	# on at least zsh 5.0.2).
 	exec 2>/dev/null
 
 	local -A storage
