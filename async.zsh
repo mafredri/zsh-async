@@ -139,6 +139,9 @@ _async_worker() {
 			_unset_trap)
 				notify_parent=0; continue;;
 			_killjobs)
+				# Only send SIGTERM if there are actual jobs running.
+				(( $#jobstates == 0 )) && continue
+
 				trap '' TERM    # Capture SIGTERM.
 				kill -TERM -$$  # Send to entire process group.
 				trap - TERM     # Reset local trap.
