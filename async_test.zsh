@@ -414,6 +414,10 @@ test_async_worker_survives_termination_of_other_worker() {
 	cb() { result+=("$@") }
 
 	async_start_worker test1
+	t_defer async_stop_worker test1
+
+	# Start and stop a worker, will send SIGHUP to previous worker
+	# (probably has to do with some shell inheritance).
 	async_start_worker test2
 	async_stop_worker test2
 
