@@ -139,6 +139,10 @@ _async_worker() {
 				# Only send SIGTERM if there are actual jobs running.
 				(( $#jobstates == 0 )) && continue
 
+				# Grab lock to prevent half-written output in case a child
+				# process is in the middle of writing to stdin during kill.
+				read -k 1 -p -r
+
 				trap '' TERM    # Capture SIGTERM.
 				kill -TERM -$$  # Send to entire process group.
 				trap - TERM     # Reset local trap.
