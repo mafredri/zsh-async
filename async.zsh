@@ -36,7 +36,14 @@ _async_job() {
 
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
 		print -r -n - ${(q)1} $ret ${(q)stdout} $duration
-	} 2> >(stderr=$(cat); print -r -n - " "${(q)stderr}$'\0')
+	} 2> >(
+		# The `cat` command will terminate when the command block has compelted
+		# (e.g. output printed).
+		stderr=$(cat)
+		# Here stderr is prefixed with a space (to separate it from the above
+		# print), quoted and suffixed with a $'\0' (command output delimiter).
+		print -r -n - " "${(q)stderr}$'\0'
+	)
 
 	# Unlock mutex by inserting a token.
 	print -n -p $tok
