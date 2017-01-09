@@ -121,7 +121,8 @@ _async_worker() {
 	done
 
 	# Wait for jobs sent by async_job.
-	typeset -a cmd
+	local request
+	local -a cmd
 	while read -d $'\0' -r request; do
 		# Parse the request using shell parsing (z) to allow commands
 		# to be parsed from single strings and multi-args alike.
