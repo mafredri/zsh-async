@@ -208,7 +208,7 @@ async_process_results() {
 	typeset -gA ASYNC_PROCESS_BUFFER
 
 	# Read output from zpty and parse it if available.
-	while zpty -r -t $worker data '*' 2>/dev/null; do
+	while zpty -r -t $worker data 2>/dev/null; do
 		ASYNC_PROCESS_BUFFER[$worker]+=$data
 		len=${#ASYNC_PROCESS_BUFFER[$worker]}
 		pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
