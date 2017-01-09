@@ -202,8 +202,8 @@ async_process_results() {
 	local callback=$2
 	local caller=$3
 	local -a items
-	local null=$'\0' data len pos
-	integer num_processed
+	local null=$'\0' data
+	integer len pos num_processed
 
 	typeset -gA ASYNC_PROCESS_BUFFER
 
@@ -218,21 +218,28 @@ async_process_results() {
 			continue
 		fi
 
-		# Take the content from the beginning, until the NULL-character and
-		# perform shell parsing (z) and unquoting (Q) as an array (@).
-		items=("${(@Q)${(z)ASYNC_PROCESS_BUFFER[$worker][1,$pos-1]}}")
+		while (( pos <= len )); do
+			# Take the content from the beginning, until the NULL-character and
+			# perform shell parsing (z) and unquoting (Q) as an array (@).
+			items=("${(@Q)${(z)ASYNC_PROCESS_BUFFER[$worker][1,$pos-1]}}")
 
-		# Remove the extracted items from the buffer.
-		ASYNC_PROCESS_BUFFER[$worker]=${ASYNC_PROCESS_BUFFER[$worker][$pos+1,$len]}
+			# Remove the extracted items from the buffer.
+			ASYNC_PROCESS_BUFFER[$worker]=${ASYNC_PROCESS_BUFFER[$worker][$pos+1,$len]}
 
-		# We should never encounter this condition,
-		# but we check for it anyway (just in case).
-		if (( $#items != 5 )); then
-			print -u2 - "$0:$LINENO: error: bad format, got ${#items} items (${(@q)items})"
-		fi
+			# We should never encounter this condition,
+			# but we check for it anyway (just in case).
+			if (( $#items != 5 )); then
+				print -u2 - "$0:$LINENO: error: bad format, got ${#items} items (${(@q)items})"
+			fi
 
-		$callback "${(@)items}"  # Send all parsed items to the callback.
-		(( num_processed++ ))
+			$callback "${(@)items}"  # Send all parsed items to the callback.
+			(( num_processed++ ))
+
+			len=${#ASYNC_PROCESS_BUFFER[$worker]}
+			if (( len > 1 )); then
+				pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
+			fi
+		done
 	done
 
 	(( num_processed )) && return 0
