@@ -209,7 +209,7 @@ async_process_results() {
 	local caller=$3
 	local -a items
 	local null=$'\0' data
-	integer len pos num_processed
+	integer -l len pos num_processed
 
 	typeset -gA ASYNC_PROCESS_BUFFER
 
