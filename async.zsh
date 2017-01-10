@@ -32,18 +32,11 @@ _async_job() {
 		duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 		# Grab mutex lock, stalls until token is available.
-		read -k 1 -p -r tok
+		read -r -k 1 -p tok || exit 1
 
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
 		print -r -n - ${(q)1} $ret ${(q)stdout} $duration
-	} 2> >(
-		# The `cat` command will terminate when the command block has compelted
-		# (e.g. output printed).
-		stderr=$(cat)
-		# Here stderr is prefixed with a space (to separate it from the above
-		# print), quoted and suffixed with a $'\0' (command output delimiter).
-		print -r -n - " "${(q)stderr}$'\0'
-	)
+	} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
 
 	# Unlock mutex by inserting a token.
 	print -n -p $tok
@@ -61,13 +54,13 @@ _async_worker() {
 	# Redirect stderr to `/dev/null` in case unforseen errors produced by the
 	# worker. For example: `fork failed: resource temporarily unavailable`.
 	# Some older versions of zsh might also print malloc errors (know to happen
-	# on at least zsh 5.0.2).
+	# on at least zsh 5.0.2 and 5.0.8) likely due to kill signals.
 	exec 2>/dev/null
 
-	# When a zpty is deleted (using -d) all other zpty instances created before
-	# the one being deleted get sent SIGHUP, unless we catch it, the async
-	# worker would simply stop working although appearing in the list of zpty's
-	# (zpty -L).
+	# When a zpty is deleted (using -d) all the zpty instances created before
+	# the one being deleted receive a SIGHUP, unless we catch it, the async
+	# worker would simply exit (stop working) even though visible in the list
+	# of zpty's (zpty -L).
 	TRAPHUP() {
 		return 0  # Return 0, indicating signal was handled.
 	}
@@ -120,37 +113,46 @@ _async_worker() {
 		esac
 	done
 
-	# Wait for jobs sent by async_job.
+	killjobs() {
+		# No need to send SIGHUP if no jobs are running.
+		(( $#jobstates == 0 )) && return
+
+		# Grab lock to prevent half-written output in case a child
+		# process is in the middle of writing to stdin during kill.
+		read -r -k 1 -p
+
+		trap '' HUP    # Capture SIGHUP.
+		kill -HUP -$$  # Send to entire process group.
+		trap - HUP     # Reset local trap.
+		coproc :       # Quit coproc.
+		coproc_pid=0   # Reset pid.
+	}
+
 	local request
 	local -a cmd
-	while read -d $'\0' -r request; do
+	while :; do
+		# Wait for jobs sent by async_job.
+		read -r -d $'\0' request || {
+			# Since we handle SIGHUP above (and thus do not know when `zpty -d`)
+			# occurs, a failure to read probably indicates that stdin has
+			# closed. This is why we propagate the signal to all children and
+			# exit manually.
+			kill -HUP -$$  # Send SIGHUP to all jobs.
+			exit 0
+		}
+
+		# Check for non-job commands sent to worker
+		case $request in
+			_unset_trap) notify_parent=0; continue;;
+			_killjobs)   killjobs; continue;;
+		esac
+
 		# Parse the request using shell parsing (z) to allow commands
 		# to be parsed from single strings and multi-args alike.
 		cmd=("${(z)request}")
 
 		# Name of the job (first argument).
 		local job=$cmd[1]
-
-		# Check for non-job commands sent to worker
-		case $job in
-			_unset_trap)
-				notify_parent=0; continue;;
-			_killjobs)
-				# Only send SIGTERM if there are actual jobs running.
-				(( $#jobstates == 0 )) && continue
-
-				# Grab lock to prevent half-written output in case a child
-				# process is in the middle of writing to stdin during kill.
-				read -k 1 -p -r
-
-				trap '' TERM    # Capture SIGTERM.
-				kill -TERM -$$  # Send to entire process group.
-				trap - TERM     # Reset local trap.
-				coproc :        # Quit coproc.
-				coproc_pid=0    # Reset pid.
-				continue
-				;;
-		esac
 
 		# If worker should perform unique jobs
 		if (( unique )); then
