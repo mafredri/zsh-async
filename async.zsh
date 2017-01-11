@@ -232,13 +232,14 @@ async_process_results() {
 			# Remove the extracted items from the buffer.
 			ASYNC_PROCESS_BUFFER[$worker]=${ASYNC_PROCESS_BUFFER[$worker][$pos+1,$len]}
 
-			# We should never encounter this condition,
-			# but we check for it anyway (just in case).
-			if (( $#items != 5 )); then
-				print -u2 - "$0:$LINENO: error: bad format, got ${#items} items (${(@q)items})"
+			if (( $#items == 5 )); then
+				$callback "${(@)items}"  # Send all parsed items to the callback.
+			else
+				# In case of corrupt data, invoke callback with *async* as job
+				# name, non-zero exit status and an error message on stderr.
+				$callback "async" 1 "" 0 "$0:$LINENO: error: bad format, got ${#items} items (${(@q)items})"
 			fi
 
-			$callback "${(@)items}"  # Send all parsed items to the callback.
 			(( num_processed++ ))
 
 			len=${#ASYNC_PROCESS_BUFFER[$worker]}
