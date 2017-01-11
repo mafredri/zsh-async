@@ -405,7 +405,7 @@ async_start_worker() {
 		# For ZSH versions older than 5.0.8 we delay a bit to give
 		# time for the worker to start before issuing commands,
 		# otherwise it will not be ready to receive them.
-		sleep 0.05
+		sleep 0.001
 	fi
 
 	if (( ASYNC_USE_ZLE_HANDLER )); then
