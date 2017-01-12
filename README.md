@@ -118,10 +118,23 @@ print "Completed $COMPLETED tasks!"
 
 ## Testing
 
-The test cases are really basic at this moment, making the more advanced is on the TODO list.
+Tests are located in `*_test.zsh` and can be run by executing the test runner: `./test.zsh`.
 
-```zsh
-./async.test.sh
+Example:
+
+```console
+$ ./test.zsh
+ok	./async_test.zsh	2.334s
+```
+
+The test suite can also run specific tasks that match a pattern, for example:
+
+```console
+$ ./test.zsh -v -run zle
+=== RUN   test_zle_watcher
+--- PASS: test_zle_watcher (0.07s)
+PASS
+ok	./async_test.zsh	0.070s
 ```
 
 ## Limitations
