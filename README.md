@@ -126,21 +126,12 @@ The test cases are really basic at this moment, making the more advanced is on t
 
 ## Limitations
 
-* Since NULL-characters (`$'\0'`) are used to separate output from the async worker, any nulls will be stripped from the output to prevent corruption.
-* NULL-characters are also used by `async_job` to separate command arguments, care should be taken to not use NULLs in a async job.
-* ~~Currently you cannot pass a job like `"sleep 1 && echo hi"`, it needs to be a single command~~. Fixed in [this commit](https://github.com/mafredri/zsh-async/commit/e6d70e0eea0a80b1624f407f60795cfb1a4524e1).
+* A NULL-character (`$'\0'`) is used by `async_job` to signify the end of the command, it is recommended not to pass them as arguments, although they should work when passing multiple arguments to `async_job` (because of quoting).
 * Tell me? :)
 
-## Recommendations
+## Tips
 
-If you do not with to use the `notify` feature, you can couple `zsh-async` with `zsh/sched` or the zsh `periodic` function for scheduling the worker results to be processed.
-
-## Todo
-
-* ~~Implement optional method of notifying main process through kill-signals when work is complete~~
-* Write more tests
-* Better zsh module structure
-* ~~Improve the error handling, it is detectable~~
+If you do not wish to use the `notify` feature, you can couple `zsh-async` with `zsh/sched` or the zsh `periodic` function for scheduling the worker results to be processed.
 
 ## Why did I make this?
 
