@@ -80,7 +80,7 @@ _async_worker() {
 	unset zsh_hooks zsh_hook_functions  # Cleanup.
 
 	child_exit() {
-		local pids
+		local -a pids
 		pids=(${${(v)jobstates##*:*:}%\=*})
 
 		# If coproc (cat) is the only child running, we close it to avoid
@@ -114,16 +114,19 @@ _async_worker() {
 	done
 
 	killjobs() {
+		local tok
+		local -a pids
+		pids=(${${(v)jobstates##*:*:}%\=*})
+
 		# No need to send SIGHUP if no jobs are running.
-		(( $#jobstates == 0 )) && return
+		(( $#pids == 0 )) && continue
+		(( $#pids == 1 )) && [[ $coproc_pid = $pids[1] ]] && continue
 
 		# Grab lock to prevent half-written output in case a child
 		# process is in the middle of writing to stdin during kill.
-		read -r -k 1 -p
+		(( coproc_pid )) && read -r -k 1 -p tok
 
-		trap '' HUP    # Capture SIGHUP.
 		kill -HUP -$$  # Send to entire process group.
-		trap - HUP     # Reset local trap.
 		coproc :       # Quit coproc.
 		coproc_pid=0   # Reset pid.
 	}
@@ -177,9 +180,8 @@ _async_worker() {
 			print -n -p "t"
 		fi
 
-		# Run job in background, disable stderr for _async_job to avoid
-		# accidental output corruption. Completed jobs are printed to stdout.
-		_async_job $cmd 2>/dev/null &
+		# Run job in background, completed jobs are printed to stdout.
+		_async_job $cmd &
 		# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
 		storage[$job]="$!"
 
