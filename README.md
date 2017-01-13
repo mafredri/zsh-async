@@ -38,7 +38,7 @@ Start a new async worker with optional parameters, a worker can be told to only 
 
 * `-n` notify through `SIGWINCH` signal. Needs to be caught with a `trap '' WINCH` in the process defined by `-p`
 
-  **NOTE:** Since zsh version `5.1` (assuming an interactive shell) this option is no longer needed and has no effect. Signaling through `SIGWINCH` has been replaced by a ZLE watcher that is triggered on output from the `zpty` instance (still requires a callback function through `async_register_callback` though).
+  **NOTE:** Since zsh version `5.2` (assuming an interactive shell) this option is no longer needed and has no effect. Signaling through `SIGWINCH` has been replaced by a ZLE watcher that is triggered on output from the `zpty` instance (still requires a callback function through `async_register_callback` though).
 
 * `-p` pid to notify (defaults to current pid)
 
