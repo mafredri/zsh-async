@@ -316,7 +316,7 @@ async_register_callback() {
 
 	ASYNC_CALLBACKS[$worker]="$*"
 
-	if (( ! ASYNC_USE_ZLE_HANDLER )); then
+	if (( ! ASYNC_ZPTY_RETURNS_FD )); then
 		trap '_async_notify_trap' WINCH
 	fi
 }
@@ -395,6 +395,14 @@ async_start_worker() {
 		unsetopt xtrace
 	}
 
+	if [[ -o interactive ]] && [[ -o zle ]] && (( ! ASYNC_ZPTY_RETURNS_FD )); then
+		# When zpty doesn't return a file descriptor (on older versions of zsh)
+		# we try to guess it anyway.
+		integer -l zptyfd
+		exec {zptyfd}>&1  # Open a new file descriptor (above 10).
+		exec {zptyfd}>&-  # Close it so it's free to be used by zpty.
+	fi
+
 	zpty -b $worker _async_worker -p $$ $@ || {
 		async_stop_worker $worker
 		return 1
@@ -410,7 +418,13 @@ async_start_worker() {
 		sleep 0.001
 	fi
 
-	if (( ASYNC_USE_ZLE_HANDLER )); then
+	if [[ -o interactive ]] && [[ -o zle ]] && (( ! ASYNC_ZPTY_RETURNS_FD )); then
+		ASYNC_PTYS[$zptyfd]=$worker        # Create mapping.
+		zle -F $zptyfd _async_zle_watcher  # Start watching the file descriptor we deduced.
+		async_job $worker _unset_trap
+	fi
+
+	if (( ASYNC_ZPTY_RETURNS_FD )); then
 		ASYNC_PTYS[$REPLY]=$worker
 		zle -F $REPLY _async_zle_watcher
 
@@ -463,11 +477,11 @@ async_init() {
 
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
-	ASYNC_USE_ZLE_HANDLER=0
+	ASYNC_ZPTY_RETURNS_FD=0
 	[[ -o interactive ]] && [[ -o zle ]] && {
 		typeset -h REPLY
 		zpty _async_test :
-		(( REPLY )) && ASYNC_USE_ZLE_HANDLER=1
+		(( REPLY )) && ASYNC_ZPTY_RETURNS_FD=1
 		zpty -d _async_test
 	}
 }
