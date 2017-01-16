@@ -461,10 +461,6 @@ zpty_deinit() {
 }
 
 test_zle_watcher() {
-	if [[ $ZSH_VERSION < 5.2 ]]; then
-		t_skip "zpty does not return a file descriptor on zsh <5.2"
-	fi
-
 	zpty_init '
 		emulate -R zsh
 		setopt zle

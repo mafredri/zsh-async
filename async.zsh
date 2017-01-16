@@ -316,7 +316,9 @@ async_register_callback() {
 
 	ASYNC_CALLBACKS[$worker]="$*"
 
-	if (( ! ASYNC_USE_ZLE_HANDLER )); then
+	# Enable trap when the ZLE watcher is unavailable, allows
+	# workers to notify (via -n) when a job is done.
+	if [[ ! -o interactive ]] || [[ ! -o zle ]]; then
 		trap '_async_notify_trap' WINCH
 	fi
 }
@@ -395,6 +397,14 @@ async_start_worker() {
 		unsetopt xtrace
 	}
 
+	if (( ! ASYNC_ZPTY_RETURNS_FD )) && [[ -o interactive ]] && [[ -o zle ]]; then
+		# When zpty doesn't return a file descriptor (on older versions of zsh)
+		# we try to guess it anyway.
+		integer -l zptyfd
+		exec {zptyfd}>&1  # Open a new file descriptor (above 10).
+		exec {zptyfd}>&-  # Close it so it's free to be used by zpty.
+	fi
+
 	zpty -b $worker _async_worker -p $$ $@ || {
 		async_stop_worker $worker
 		return 1
@@ -410,11 +420,15 @@ async_start_worker() {
 		sleep 0.001
 	fi
 
-	if (( ASYNC_USE_ZLE_HANDLER )); then
-		ASYNC_PTYS[$REPLY]=$worker
-		zle -F $REPLY _async_zle_watcher
+	if [[ -o interactive ]] && [[ -o zle ]]; then
+		if (( ! ASYNC_ZPTY_RETURNS_FD )); then
+			REPLY=$zptyfd  # Use the guessed value for the file desciptor.
+		fi
 
-		# If worker was called with -n, disable trap in favor of zle handler
+		ASYNC_PTYS[$REPLY]=$worker        # Map the file desciptor to the worker.
+		zle -F $REPLY _async_zle_watcher  # Register the ZLE handler.
+
+		# Disable trap in favor of ZLE handler when notify is enabled (-n).
 		async_job $worker _unset_trap
 	fi
 }
@@ -463,11 +477,11 @@ async_init() {
 
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
-	ASYNC_USE_ZLE_HANDLER=0
+	ASYNC_ZPTY_RETURNS_FD=0
 	[[ -o interactive ]] && [[ -o zle ]] && {
 		typeset -h REPLY
 		zpty _async_test :
-		(( REPLY )) && ASYNC_USE_ZLE_HANDLER=1
+		(( REPLY )) && ASYNC_ZPTY_RETURNS_FD=1
 		zpty -d _async_test
 	}
 }
