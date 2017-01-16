@@ -38,7 +38,7 @@ Start a new async worker with optional parameters, a worker can be told to only 
 
 * `-n` notify through `SIGWINCH` signal. Needs to be caught with a `trap '' WINCH` in the process defined by `-p`
 
-  **NOTE:** Since zsh version `5.2` (assuming an interactive shell) this option is no longer needed and has no effect. Signaling through `SIGWINCH` has been replaced by a ZLE watcher that is triggered on output from the `zpty` instance (still requires a callback function through `async_register_callback` though).
+  **NOTE:** When `zsh-async` is used in an interactive shell with ZLE enabled this option is not needed. Signaling through `SIGWINCH` has been replaced by a ZLE watcher that is triggered on output from the `zpty` instance (still requires a callback function through `async_register_callback` though). Technically zsh versions prior to `5.2` do not return the file descriptor for zpty instances, however, `zsh-async` attempts to deduce it anyway.
 
 * `-p` pid to notify (defaults to current pid)
 
