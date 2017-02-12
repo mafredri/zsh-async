@@ -431,6 +431,26 @@ test_async_worker_survives_termination_of_other_worker() {
 	(( $#result == 5 )) || t_error "wanted a result, got (${(@Vq)result})"
 }
 
+test_async_job_with_rc_expand_param() {
+	setopt localoptions rcexpandparam 
+
+	# Make sure to test with multiple options
+	local -a result
+	cb() { result=("$@") }
+
+	async_start_worker test
+	async_job test print "hello world"
+	while ! async_process_results test cb; do :; done
+	async_stop_worker test
+
+	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
+	[[ $result[2] = 0 ]] || t_error "want exit code: 0, got" $result[2]
+
+	[[ $result[3] = "hello world" ]] || {
+		t_error "want output: \"hello world\", got" ${(Vq-)result[3]}
+	}
+}
+
 zpty_init() {
 	zmodload zsh/zpty
 
