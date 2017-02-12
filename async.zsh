@@ -279,8 +279,6 @@ _async_zle_watcher() {
 # 	async_job <worker_name> <my_function> [<function_params>]
 #
 async_job() {
-	# Reset all options to defaults inside async job.
-	emulate -R zsh
 	setopt localoptions noshwordsplit
 
 	local worker=$1; shift
@@ -291,7 +289,8 @@ async_job() {
 		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 	fi
 
-	zpty -w $worker $cmd$'\0'
+	# Quote the cmd in case RC_EXPAND_PARAM is set.
+	zpty -w $worker "$cmd"$'\0'
 }
 
 # This function traps notification signals and calls all registered callbacks
