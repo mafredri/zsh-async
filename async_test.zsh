@@ -91,7 +91,6 @@ test_async_start_stop_worker() {
 }
 
 test_async_job_print_matches_input_exactly() {
-	# t_skip Does not match yet.
 	local -a result
 	cb() { result=("$@") }
 

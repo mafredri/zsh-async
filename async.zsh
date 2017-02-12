@@ -16,7 +16,7 @@ _async_job() {
 	# Disable xtrace as it would mangle the output.
 	setopt localoptions noxtrace
 
-	# Store start time as double precision (+E disables scientific notation)
+	# Store start time for job.
 	float -F duration=$EPOCHREALTIME
 
 	# Run the command and capture both stdout (`eval`) and stderr (`cat`) in
