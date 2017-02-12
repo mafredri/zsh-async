@@ -279,6 +279,8 @@ _async_zle_watcher() {
 # 	async_job <worker_name> <my_function> [<function_params>]
 #
 async_job() {
+	# Reset all options to defaults inside async job.
+	emulate -R zsh
 	setopt localoptions noshwordsplit
 
 	local worker=$1; shift
