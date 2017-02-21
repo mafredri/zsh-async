@@ -204,7 +204,7 @@ _async_worker() {
 # 	$5 = resulting stderr from execution
 #
 async_process_results() {
-	setopt localoptions noshwordsplit
+	setopt localoptions unset noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local worker=$1
 	local callback=$2
@@ -279,7 +279,7 @@ _async_zle_watcher() {
 # 	async_job <worker_name> <my_function> [<function_params>]
 #
 async_job() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local worker=$1; shift
 
