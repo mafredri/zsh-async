@@ -459,13 +459,16 @@ test_all_options() {
 	# Make sure worker is stopped, even if tests fail.
 	t_defer async_stop_worker test
 
-	{ sleep 5 && t_fatal "timed out" } &
+	{ sleep 10 && t_fatal "timed out" } &
 	local tpid=$!
 
 	opts=(${(k)options})
 
 	# These options can't be tested.
-	exclude=(zle interactive restricted shinstdin stdin onecmd singlecommand)
+	exclude=(
+		zle interactive restricted shinstdin stdin onecmd singlecommand
+		warnnestedvar
+	)
 
 	for opt in ${opts:|exclude}; do
 		if [[ $options[$opt] = on ]]; then
