@@ -430,8 +430,63 @@ test_async_worker_survives_termination_of_other_worker() {
 	(( $#result == 5 )) || t_error "wanted a result, got (${(@Vq)result})"
 }
 
+setopt_helper() {
+	setopt localoptions $1
+
+	# Make sure to test with multiple options
+	local -a result
+	cb() { result=("$@") }
+
+	async_start_worker test
+	async_job test print "hello world"
+	while ! async_process_results test cb; do :; done
+	async_stop_worker test
+
+	# At this point, ksh arrays will only mess with the test.
+	setopt noksharrays
+
+	[[ $result[1] = print ]] || t_fatal "$1 want command name: print, got" $result[1]
+	[[ $result[2] = 0 ]] || t_fatal "$1 want exit code: 0, got" $result[2]
+
+	[[ $result[3] = "hello world" ]] || {
+		t_fatal "$1 want output: \"hello world\", got" ${(Vq-)result[3]}
+	}
+}
+
+test_all_options() {
+	local -a opts exclude
+
+	if [[ $ZSH_VERSION == 5.0.2 ]]; then
+		t_skip "Test is not reliable on zsh 5.0.2"
+	fi
+
+	# Make sure worker is stopped, even if tests fail.
+	t_defer async_stop_worker test
+
+	{ sleep 10 && t_fatal "timed out" } &
+	local tpid=$!
+
+	opts=(${(k)options})
+
+	# These options can't be tested.
+	exclude=(
+		zle interactive restricted shinstdin stdin onecmd singlecommand
+		warnnestedvar
+	)
+
+	for opt in ${opts:|exclude}; do
+		if [[ $options[$opt] = on ]]; then
+			setopt_helper no$opt
+		else
+			setopt_helper $opt
+		fi
+	done 2>/dev/null  # Remove redirect to see output.
+
+	kill $tpid  # Stop timeout.
+}
+
 test_async_job_with_rc_expand_param() {
-	setopt localoptions rcexpandparam 
+	setopt localoptions rcexpandparam
 
 	# Make sure to test with multiple options
 	local -a result
