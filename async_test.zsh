@@ -456,6 +456,10 @@ setopt_helper() {
 test_all_options() {
 	local -a opts exclude
 
+	if [[ $ZSH_VERSION == 5.0.2 ]]; then
+		t_skip "Test is not reliable on zsh 5.0.2"
+	fi
+
 	# Make sure worker is stopped, even if tests fail.
 	t_defer async_stop_worker test
 
