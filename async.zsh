@@ -9,7 +9,7 @@
 #
 
 # Produce debug output from zsh-async when set to 1.
-ASYNC_DEBUG=${ASYNC_DEBUG:-0}
+typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
@@ -472,14 +472,14 @@ async_stop_worker() {
 #
 async_init() {
 	(( ASYNC_INIT_DONE )) && return
-	ASYNC_INIT_DONE=1
+	typeset -g ASYNC_INIT_DONE=1
 
 	zmodload zsh/zpty
 	zmodload zsh/datetime
 
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
-	ASYNC_ZPTY_RETURNS_FD=0
+	typeset -g ASYNC_ZPTY_RETURNS_FD=0
 	[[ -o interactive ]] && [[ -o zle ]] && {
 		typeset -h REPLY
 		zpty _async_test :
