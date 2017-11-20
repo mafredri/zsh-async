@@ -456,8 +456,8 @@ setopt_helper() {
 test_all_options() {
 	local -a opts exclude
 
-	if [[ $ZSH_VERSION == 5.0.2 ]]; then
-		t_skip "Test is not reliable on zsh 5.0.2"
+	if [[ $ZSH_VERSION == 5.0.? ]]; then
+		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
 	# Make sure worker is stopped, even if tests fail.
