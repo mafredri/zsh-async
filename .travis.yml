@@ -47,3 +47,7 @@ before_script:
 
 script:
   - zsh test.zsh -v
+
+allow_failures:
+  - env: _ZSH_VERSION=5.0.2
+  - env: _ZSH_VERSION=5.0.8
