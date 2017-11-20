@@ -123,7 +123,7 @@ test_async_process_results() {
 
 	async_job test print -n hi
 	while ! async_process_results test cb; do :; done
-	(( $#r == 5 )) || t_error "want one result, got $(( $#r % 5 ))"
+	(( $#r == 6 )) || t_error "want one result, got $(( $#r % 6 ))"
 }
 
 test_async_process_results_stress() {
@@ -152,16 +152,16 @@ test_async_process_results_stress() {
 		#   $'39 0.0056798458 '
 		# This is again, probably due to the zpty buffer being full, we only
 		# need to ensure that not too many commands are run before we process.
-		(( iter % 5 == 0 )) && async_process_results test cb
+		(( iter % 6 == 0 )) && async_process_results test cb
 	done
 
 	float start=$EPOCHSECONDS
 
-	while (( $#r / 5 < iter )); do
+	while (( $#r / 6 < iter )); do
 		async_process_results test cb
 		(( EPOCHSECONDS - start > timeout )) && {
 			t_log "timed out after ${timeout}s"
-			t_fatal "wanted $iter results, got $(( $#r / 5 ))"
+			t_fatal "wanted $iter results, got $(( $#r / 6 ))"
 		}
 	done
 
@@ -171,7 +171,7 @@ test_async_process_results_stress() {
 		[[ $r[2] = 0 ]] || t_error "want exit 0, got $r[2]"
 		stdouts+=($r[3])
 		[[ -z $r[5] ]] || t_error "want no stderr, got ${(Vq-)r[5]}"
-		shift 5 r
+		shift 6 r
 	done
 
 	local got want
@@ -185,16 +185,16 @@ test_async_process_results_stress() {
 	for i in {1..$iter}; do
 		async_job test "sleep 1 && print -n $i"
 		sleep 0.00001
-		(( iter % 5 == 0 )) && async_process_results test cb
+		(( iter % 6 == 0 )) && async_process_results test cb
 	done
 
 	start=$EPOCHSECONDS
 
-	while (( $#r / 5 < iter )); do
+	while (( $#r / 6 < iter )); do
 		async_process_results test cb
 		(( EPOCHSECONDS - start > timeout )) && {
 			t_log "timed out after ${timeout}s"
-			t_fatal "wanted $iter results, got $(( $#r / 5 ))"
+			t_fatal "wanted $iter results, got $(( $#r / 6 ))"
 		}
 	done
 
@@ -204,7 +204,7 @@ test_async_process_results_stress() {
 		[[ $r[2] = 0 ]] || t_error "want exit 0, got $r[2]"
 		stdouts+=($r[3])
 		[[ -z $r[5] ]] || t_error "want no stderr, got ${(Vq-)r[5]}"
-		shift 5 r
+		shift 6 r
 	done
 
 	# Check that we received all numbers.
@@ -292,7 +292,7 @@ test_async_job_unique_worker() {
 	async_stop_worker test
 
 	# Ensure that cb was only called once with correc output.
-	[[ ${#result} = 5 ]] || t_error "result: want 5 elements, got" ${#result}
+	[[ ${#result} = 6 ]] || t_error "result: want 6 elements, got" ${#result}
 	[[ $result[3] = one ]] || t_error "output: want 'one', got" ${(Vq-)result[3]}
 }
 
@@ -427,7 +427,7 @@ test_async_worker_survives_termination_of_other_worker() {
 		async_process_results test1 cb && break
 	done
 
-	(( $#result == 5 )) || t_error "wanted a result, got (${(@Vq)result})"
+	(( $#result == 6 )) || t_error "wanted a result, got (${(@Vq)result})"
 }
 
 setopt_helper() {
