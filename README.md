@@ -62,6 +62,8 @@ The `callback_function` is called with the following parameters:
 * `$3` resulting (stdout) output from job execution
 * `$4` execution time, floating point e.g. 0.0076138973 seconds
 * `$5` resulting (stderr) error output from job execution
+* `$6` has next result in buffer (0 = buffer empty, 1 = yes)
+  * This means another async job has completed and is pending in the buffer, it's very likely that your callback function will be called a second time (or more) in this execution. It's generally a good idea to e.g. delay prompt updates (`zle reset-prompt`) until the buffer is empty to prevent strange states in ZLE.
 
 #### `async_register_callback <worker_name> <callback_function>`
 
