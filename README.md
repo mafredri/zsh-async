@@ -22,6 +22,8 @@ The async worker is a separate environment (think web worker). You send it a job
 
 You can either source the `async.zsh` script directly or insert under your `$fpath` as async and autoload it through `autoload -Uz async && async`.
 
+` zplug "mafredri/zsh-async", from:"github", use:"async.zsh" `
+
 ### Functions
 
 The `zsh-async` library has a bunch of functions that need to be used to perform async actions:
