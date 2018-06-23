@@ -165,10 +165,12 @@ _async_worker() {
 			# $parent_pid
                         #
 			# Probably 1 is more performant and portable, but I think 2
-			# is more reliable. For instance, 1 breaks on dirs with spaces.
+			# is more reliable. For instance, 1 breaks on dirs with spaces
+                        # (maybe could be fixed by treating all the remaining elemnts of
+                        # $cmd as parts of the directory name).
 			#
 			# Here is an implementation of option 1:
-			# _inheritcwd) cd `readlink -e /proc/$parent_pid/cwd`; continue;;
+			# _inheritcwd) cd "`readlink -e /proc/$parent_pid/cwd`"; continue;;
 			#
 			# Below is option 2, which also pushed me to move this
 			# case statement below the cmd and job assignments.
