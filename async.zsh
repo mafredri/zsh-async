@@ -159,14 +159,14 @@ _async_worker() {
 
 			# Inherit the parents pid
 			# I can think of two options.
-			# 1: Sending the dir as a paramater to the request.
+			# 1: Sending the dir as a parameter to the request.
 			# 2: Using a POSIX equivalent of readlink or a more specialized
 			# tool like pwdx to determine the parents pwd based on
 			# $parent_pid
 			#
 			# Probably 1 is more performant and portable, but I think 2
 			# is more reliable. For instance, 1 breaks on dirs with spaces
-			# (maybe could be fixed by treating all the remaining elemnts of
+			# (maybe could be fixed by treating all the remaining elements of
 			# $cmd as parts of the directory name).
 			#
 			# Here is an implementation of option 1:
@@ -331,9 +331,9 @@ _async_notify_trap() {
 _async_inherit_parent_cwd() {
 	local pty
 	for pty in $ASYNC_PTYS; do
-		# As discussed on line 160, there are two implemntation
-		# directions I have thought of.  Below is an implementationr
-		## of the 2nd option.
+		# As discussed on line 160, there are two implementation
+		# directions I have thought of.  Below is an implementation
+		# of the 2nd option.
 		async_job $pty "_inheritcwd" "$PWD"
 	done
 }
@@ -512,6 +512,8 @@ async_init() {
 	zmodload zsh/zpty
 	zmodload zsh/datetime
 
+	# add _async_inherit_parent_cwd to the list of functions that are called when the pwd changes
+	# in a zsh shell.
 	typeset -g chpwd_functions=(_async_inherit_parent_cwd $chpwd_functions)
 
 	# Check if zsh/zpty returns a file descriptor or not,
