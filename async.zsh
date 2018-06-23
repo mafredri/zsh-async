@@ -144,18 +144,35 @@ _async_worker() {
 			exit 0
 		}
 
-		# Check for non-job commands sent to worker
-		case $request in
-			_unset_trap) notify_parent=0; continue;;
-			_killjobs)   killjobs; continue;;
-		esac
-
 		# Parse the request using shell parsing (z) to allow commands
 		# to be parsed from single strings and multi-args alike.
 		cmd=("${(z)request}")
 
 		# Name of the job (first argument).
 		local job=$cmd[1]
+
+		# Check for non-job commands sent to worker
+		case $job in
+			_unset_trap) notify_parent=0; continue;;
+			_killjobs)   killjobs; continue;;
+
+
+			# Inherit the parents pid I can think of two options. 1:
+			# Sending the dir as a paramater to the request. 2: Using
+			# a posix equivalent of readlink or a more specialized
+			# tool like pwdx to determine the parents pwd based on
+			# $parent_pid
+			# Probably 1 is more performant and posix, but I think 2
+			# is more reliable.
+			#
+			# Here is an implementation of option 1:
+			# _inheritcwd) cd `readlink -e /proc/$parent_pid/cwd`; continue;;
+			#
+			# Below is option 2, which also pushed me to move this
+			# case statement below the cmd and job assignments.
+
+			_inheritcwd) cd "$cmd[2]"; continue;;
+		esac
 
 		# If worker should perform unique jobs
 		if (( unique )); then
@@ -302,6 +319,18 @@ _async_notify_trap() {
 	local k
 	for k in ${(k)ASYNC_CALLBACKS}; do
 		async_process_results $k ${ASYNC_CALLBACKS[$k]} trap
+	done
+}
+
+
+# This function cuses all workers to inherit their parent's cwd
+_async_inherit_parent_cwd() {
+	local pty
+	for pty in $ASYNC_PTYS; do
+		# As discussed on line 160, there are two options
+		# for making this work.  Below is an implementation of the
+		# 2nd option.
+		async_job $pty "_inheritcwd" "$PWD"
 	done
 }
 
@@ -478,6 +507,8 @@ async_init() {
 
 	zmodload zsh/zpty
 	zmodload zsh/datetime
+
+	typeset -g chpwd_functions=(_async_inherit_parent_cwd $chpwd_functions)
 
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
