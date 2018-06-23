@@ -157,13 +157,15 @@ _async_worker() {
 			_killjobs)   killjobs; continue;;
 
 
-			# Inherit the parents pid I can think of two options. 1:
-			# Sending the dir as a paramater to the request. 2: Using
-			# a posix equivalent of readlink or a more specialized
+			# Inherit the parents pid
+                        # I can think of two options.
+                        # 1: Sending the dir as a paramater to the request.
+                        # 2: Using a POSIX equivalent of readlink or a more specialized
 			# tool like pwdx to determine the parents pwd based on
 			# $parent_pid
-			# Probably 1 is more performant and posix, but I think 2
-			# is more reliable.
+                        #
+			# Probably 1 is more performant and portable, but I think 2
+			# is more reliable. For instance, 1 breaks on dirs with spaces.
 			#
 			# Here is an implementation of option 1:
 			# _inheritcwd) cd `readlink -e /proc/$parent_pid/cwd`; continue;;
@@ -323,13 +325,13 @@ _async_notify_trap() {
 }
 
 
-# This function cuses all workers to inherit their parent's cwd
+# This function causes all workers to inherit their parent's cwd
 _async_inherit_parent_cwd() {
 	local pty
 	for pty in $ASYNC_PTYS; do
-		# As discussed on line 160, there are two options
-		# for making this work.  Below is an implementation of the
-		# 2nd option.
+		# As discussed on line 160, there are two implemntation
+		# directions I have thought of.  Below is an implementationr
+                # of the 2nd option.
 		async_job $pty "_inheritcwd" "$PWD"
 	done
 }
