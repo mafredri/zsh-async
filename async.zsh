@@ -165,17 +165,14 @@ _async_worker() {
 			# $parent_pid
 			#
 			# Probably 1 is more performant and portable, but I think 2
-			# is more reliable. For instance, 1 breaks on dirs with spaces
-			# (maybe could be fixed by treating all the remaining elements of
-			# $cmd as parts of the directory name).
-			#
+			# is more reliable.
 			# Here is an implementation of option 1:
 			# _inheritcwd) cd "`readlink -e /proc/$parent_pid/cwd`"; continue;;
 			#
 			# Below is option 2, which also pushed me to move this
 			# case statement below the cmd and job assignments.
 
-			_inheritcwd) cd "$cmd[2]"; continue;;
+			_inheritcwd) cd ${(Q)cmd[2]}; continue;;
 		esac
 
 		# If worker should perform unique jobs
@@ -515,8 +512,8 @@ async_init() {
 	# add _async_inherit_parent_cwd to the list of functions that are called when the pwd changes
 	# in a zsh shell.
 	if [[ $ASYNC_WORKERS_INHERIT_PWD = 1 ]]; then
-          typeset -g chpwd_functions=(_async_inherit_parent_cwd $chpwd_functions)
-        fi
+		typeset -g chpwd_functions=(_async_inherit_parent_cwd $chpwd_functions)
+	fi
 
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
