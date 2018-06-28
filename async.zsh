@@ -493,12 +493,6 @@ async_init() {
 	zmodload zsh/zpty
 	zmodload zsh/datetime
 
-	# add _async_inherit_parent_cwd to the list of functions that are called when the pwd changes
-	# in a zsh shell.
-	if [[ $ASYNC_WORKERS_INHERIT_PWD = 1 ]]; then
-		typeset -g chpwd_functions=(_async_inherit_parent_cwd $chpwd_functions)
-	fi
-
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
 	typeset -g ASYNC_ZPTY_RETURNS_FD=0
