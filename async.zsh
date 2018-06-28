@@ -155,24 +155,10 @@ _async_worker() {
 		case $job in
 			_unset_trap) notify_parent=0; continue;;
 			_killjobs)   killjobs; continue;;
-
-
-			# Inherit the parents pid
-			# I can think of two options.
-			# 1: Sending the dir as a parameter to the request.
-			# 2: Using a POSIX equivalent of readlink or a more specialized
-			# tool like pwdx to determine the parents pwd based on
-			# $parent_pid
-			#
-			# Probably 1 is more performant and portable, but I think 2
-			# is more reliable.
-			# Here is an implementation of option 1:
-			# _inheritcwd) cd "`readlink -e /proc/$parent_pid/cwd`"; continue;;
-			#
-			# Below is option 2, which also pushed me to move this
-			# case statement below the cmd and job assignments.
-
-			_inheritcwd) cd ${(Q)cmd[2]}; continue;;
+			# Use (Q) here to remove a level of quotes, because $cmd has too
+			# many quotes otherwise. e.g. '/dir\ with\ spaces' vs
+			# /dir\ with\ spaces
+			_update_worker_pwd) cd -q ${(Q)cmd[2]}; continue;;
 		esac
 
 		# If worker should perform unique jobs
