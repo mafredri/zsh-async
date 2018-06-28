@@ -311,13 +311,11 @@ _async_notify_trap() {
 
 
 # This function causes all workers to inherit their parent's cwd
-_async_inherit_parent_cwd() {
+async_update_worker_pwd() {
+	setopt localoptions noshwordsplit
 	local pty
 	for pty in $ASYNC_PTYS; do
-		# As discussed on line 160, there are two implementation
-		# directions I have thought of.  Below is an implementation
-		# of the 2nd option.
-		async_job $pty "_inheritcwd" "$PWD"
+		async_job $pty _update_worker_pwd $PWD
 	done
 }
 
