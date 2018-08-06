@@ -36,7 +36,7 @@ _async_job() {
 		read -r -k 1 -p tok || exit 1
 
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-		print -r -n - ${(q)1} $ret ${(q)stdout} $duration
+		print -r -n - $'\0'${(q)1} $ret ${(q)stdout} $duration
 	} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
 
 	# Unlock mutex by inserting a token.
@@ -245,13 +245,15 @@ async_process_results() {
 			if (( $#items == 5 )); then
 				items+=($has_next)
 				$callback "${(@)items}"  # Send all parsed items to the callback.
+				(( num_processed++ ))
+			elif [[ -z $items ]]; then
+				# Empty items occur between results due to double-null ($'\0\0')
+				# caused by commands being both pre and suffixed with null.
 			else
 				# In case of corrupt data, invoke callback with *async* as job
 				# name, non-zero exit status and an error message on stderr.
 				$callback "async" 1 "" 0 "$0:$LINENO: error: bad format, got ${#items} items (${(q)items})" $has_next
 			fi
-
-			(( num_processed++ ))
 		done
 	done
 
