@@ -145,18 +145,22 @@ _async_worker() {
 			exit 0
 		}
 
-		# Check for non-job commands sent to worker
-		case $request in
-			_unset_trap) notify_parent=0; continue;;
-			_killjobs)   killjobs; continue;;
-		esac
-
 		# Parse the request using shell parsing (z) to allow commands
 		# to be parsed from single strings and multi-args alike.
 		cmd=("${(z)request}")
 
 		# Name of the job (first argument).
 		local job=$cmd[1]
+
+		# Check for non-job commands sent to worker
+		case $job in
+			_unset_trap) notify_parent=0; continue;;
+			_killjobs)   killjobs; continue;;
+			# Use (Q) here to remove a level of quotes, because $cmd has too
+			# many quotes otherwise. e.g. '/dir\ with\ spaces' vs
+			# /dir\ with\ spaces
+			_update_worker_pwd) cd -q ${(Q)cmd[2]}; continue;;
+		esac
 
 		# If worker should perform unique jobs
 		if (( unique )); then
@@ -306,6 +310,16 @@ _async_notify_trap() {
 	local k
 	for k in ${(k)ASYNC_CALLBACKS}; do
 		async_process_results $k ${ASYNC_CALLBACKS[$k]} trap
+	done
+}
+
+
+# This function causes all workers to inherit their parent's cwd
+async_update_worker_pwd() {
+	setopt localoptions noshwordsplit
+	local pty
+	for pty in $ASYNC_PTYS; do
+		async_job $pty _update_worker_pwd $PWD
 	done
 }
 
