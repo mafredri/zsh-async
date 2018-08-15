@@ -432,6 +432,28 @@ test_async_worker_survives_termination_of_other_worker() {
 	(( $#result == 6 )) || t_error "wanted a result, got (${(@Vq)result})"
 }
 
+test_async_worker_update_pwd() {
+	local -a result
+	cb() { result+=("$3") }
+
+	async_start_worker test1
+	t_defer async_stop_worker test1
+
+	async_job test1 'print $PWD'
+	async_worker_eval test1 'print -n foo; cd ..; print -n bar; print -n -u2 baz'
+	async_job test1 'print $PWD'
+
+	start=$EPOCHREALTIME
+	while (( EPOCHREALTIME - start < 2.0 && $#result < 3 )); do
+		async_process_results test1 cb
+	done
+
+	(( $#result == 3 )) || t_error "wanted 3 results, got ${#result}"
+	[[ $result[2] = foobarbaz ]] || t_error "wanted async_worker_eval to output foobarbaz, got ${(q)result[2]}"
+	[[ -n $result[3] ]] || t_error "wanted second pwd to be non-empty"
+	[[ $result[1] != $result[3] ]] || t_error "wanted worker to change pwd, was ${(q)result[1]}, got ${(q)result[3]}"
+}
+
 setopt_helper() {
 	setopt localoptions $1
 
