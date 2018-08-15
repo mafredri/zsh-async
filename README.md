@@ -70,6 +70,8 @@ Output will be returned via callback, job name will be [async/eval].
 
 Get results from finished jobs and pass it to the to callback function. This is the only way to reliably return the job name, return code, output and execution time and with minimal effort.
 
+If the async process buffer becomes corrupt, the callback will be invoked with the first argument being `[async]` (job name), non-zero return code and fifth argument describing the error (stderr).
+
 The `callback_function` is called with the following parameters:
 
 * `$1` job name, e.g. the function passed to async_job
