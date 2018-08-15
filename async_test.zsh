@@ -434,7 +434,14 @@ test_async_worker_survives_termination_of_other_worker() {
 
 test_async_worker_update_pwd() {
 	local -a result
-	cb() { result+=("$3") }
+	local eval_out
+	cb() {
+		if [[ $1 == '[async/eval]' ]]; then
+			eval_out="$3"
+		else
+			result+=("$3")
+		fi
+	}
 
 	async_start_worker test1
 	t_defer async_stop_worker test1
@@ -448,10 +455,10 @@ test_async_worker_update_pwd() {
 		async_process_results test1 cb
 	done
 
-	(( $#result == 3 )) || t_error "wanted 3 results, got ${#result}"
-	[[ $result[2] = foobarbaz ]] || t_error "wanted async_worker_eval to output foobarbaz, got ${(q)result[2]}"
-	[[ -n $result[3] ]] || t_error "wanted second pwd to be non-empty"
-	[[ $result[1] != $result[3] ]] || t_error "wanted worker to change pwd, was ${(q)result[1]}, got ${(q)result[3]}"
+	(( $#result == 2 )) || t_error "wanted 2 results, got ${#result}"
+	[[ $eval_out = foobarbaz ]] || t_error "wanted async_worker_eval to output foobarbaz, got ${(q)eval_out}"
+	[[ -n $result[2] ]] || t_error "wanted second pwd to be non-empty"
+	[[ $result[1] != $result[2] ]] || t_error "wanted worker to change pwd, was ${(q)result[1]}, got ${(q)result[2]}"
 }
 
 setopt_helper() {
