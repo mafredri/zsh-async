@@ -92,7 +92,7 @@ _async_worker() {
 	unset $zsh_hook_functions           # And hooks with registered functions.
 	unset zsh_hooks zsh_hook_functions  # Cleanup.
 
-	child_exit() {
+	close_idle_coproc() {
 		local -a pids
 		pids=(${${(v)jobstates##*:*:}%\=*})
 
@@ -102,6 +102,10 @@ _async_worker() {
 			coproc :
 			coproc_pid=0
 		fi
+	}
+
+	child_exit() {
+		close_idle_coproc
 
 		# On older version of zsh (pre 5.2) we notify the parent through a
 		# SIGWINCH signal because `zpty` did not return a file descriptor (fd)
@@ -197,7 +201,6 @@ _async_worker() {
 		if (( do_eval )); then
 			shift cmd  # Strip _async_eval from cmd.
 			_async_eval $cmd
-			do_eval=0
 		else
 			# Run job in background, completed jobs are printed to stdout.
 			_async_job $cmd &
@@ -206,6 +209,14 @@ _async_worker() {
 		fi
 
 		processing=0  # Disable guard.
+
+		if (( do_eval )); then
+			do_eval=0
+
+			# When there are no active jobs we can't rely on the CHLD trap to
+			# manage the coproc lifetime.
+			close_idle_coproc
+		fi
 	done
 }
 
