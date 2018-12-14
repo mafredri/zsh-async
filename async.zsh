@@ -306,6 +306,22 @@ _async_zle_watcher() {
 	local worker=$ASYNC_PTYS[$1]
 	local callback=$ASYNC_CALLBACKS[$worker]
 
+	if [[ -n $2 ]]; then
+		# from man zshzle(1):
+		# `hup' for a disconnect, `nval' for a closed or otherwise
+		# invalid descriptor, or `err' for any other condition.
+		# Systems that support only the `select' system call always use
+		# `err'.
+
+		# this has the side effect to unregister the broken file descriptor
+		async_stop_worker $worker
+
+		if [[ -n $callback ]]; then
+			$callback '[async]' 2 "" 0 "$worker:zle -F $1 returned error $2" 0
+		fi
+		return
+	fi;
+
 	if [[ -n $callback ]]; then
 		async_process_results $worker $callback watcher
 	fi
