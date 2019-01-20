@@ -45,14 +45,14 @@ _async_job() {
 		duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 		# Grab mutex lock, stalls until token is available.
-		read -r -k 1 -p tok || exit 1
+		# read -r -k 1 -p tok || exit 1
 
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-		print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
-	} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
+		print -r -n - ${(q)jobname} $ret ${(q)stdout} $duration
+	} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr})
 
 	# Unlock mutex by inserting a token.
-	print -n -p $tok
+	# print -n -p $tok
 }
 
 # The background worker manages all tasks and runs them without interfering with other processes
@@ -244,6 +244,7 @@ async_process_results() {
 	local worker=$1
 	local callback=$2
 	local caller=$3
+	local fd=$4
 	local -a items
 	local null=$'\0' data
 	integer -l len pos num_processed has_next
@@ -251,28 +252,29 @@ async_process_results() {
 	typeset -gA ASYNC_PROCESS_BUFFER
 
 	# Read output from zpty and parse it if available.
-	while zpty -r -t $worker data 2>/dev/null; do
-		ASYNC_PROCESS_BUFFER[$worker]+=$data
-		len=${#ASYNC_PROCESS_BUFFER[$worker]}
-		pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
+	read -r data <&$fd
+	# while zpty -r -t $worker data 2>/dev/null; do
+		# ASYNC_PROCESS_BUFFER[$worker]+=$data
+		# len=${#ASYNC_PROCESS_BUFFER[$worker]}
+		# pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
 
 		# Keep going until we find a NULL-character.
 		if (( ! len )) || (( pos > len )); then
-			continue
+			# continue
 		fi
 
-		while (( pos <= len )); do
+		# while (( pos <= len )); do
 			# Take the content from the beginning, until the NULL-character and
 			# perform shell parsing (z) and unquoting (Q) as an array (@).
-			items=("${(@Q)${(z)ASYNC_PROCESS_BUFFER[$worker][1,$pos-1]}}")
+			items=("${(@Q)${(z)data}}")
 
 			# Remove the extracted items from the buffer.
-			ASYNC_PROCESS_BUFFER[$worker]=${ASYNC_PROCESS_BUFFER[$worker][$pos+1,$len]}
+			# ASYNC_PROCESS_BUFFER[$worker]=${ASYNC_PROCESS_BUFFER[$worker][$pos+1,$len]}
 
-			len=${#ASYNC_PROCESS_BUFFER[$worker]}
-			if (( len > 1 )); then
-				pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
-			fi
+			# len=${#ASYNC_PROCESS_BUFFER[$worker]}
+			# if (( len > 1 )); then
+			# 	pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
+			# fi
 
 			has_next=$(( len != 0 ))
 			if (( $#items == 5 )); then
@@ -287,8 +289,8 @@ async_process_results() {
 				# name, non-zero exit status and an error message on stderr.
 				$callback "[async]" 1 "" 0 "$0:$LINENO: error: bad format, got ${#items} items (${(q)items})" $has_next
 			fi
-		done
-	done
+		# done
+	# done
 
 	(( num_processed )) && return 0
 
@@ -302,8 +304,10 @@ async_process_results() {
 # Watch worker for output
 _async_zle_watcher() {
 	setopt localoptions noshwordsplit
+
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
-	local worker=$ASYNC_PTYS[$1]
+	local fd=$1
+	local worker=$ASYNC_PTYS[$fd]
 	local callback=$ASYNC_CALLBACKS[$worker]
 
 	if [[ -n $2 ]]; then
@@ -323,8 +327,12 @@ _async_zle_watcher() {
 	fi;
 
 	if [[ -n $callback ]]; then
-		async_process_results $worker $callback watcher
+		async_process_results $worker $callback watcher $fd
 	fi
+
+	zle -F $fd
+	exec {fd}<&-
+	unset "ASYNC_PTYS[$fd]"
 }
 
 #
@@ -338,14 +346,21 @@ async_job() {
 
 	local worker=$1; shift
 
-	local -a cmd
-	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
+	# local -a cmd
+	# cmd=("$@")
+	# if (( $#cmd > 1 )); then
+	# 	cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
+	# fi
+
+	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
+	integer -l jobfd
+	exec {jobfd}< <(_async_job "$@")
+	# exec {jobfd}< <($@)
+	zle -F $jobfd _async_zle_watcher
+	ASYNC_PTYS[$jobfd]=$worker
 
 	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	zpty -w $worker "$cmd"$'\0'
+	# zpty -w $worker "$cmd"$'\0'
 }
 
 #
@@ -361,6 +376,8 @@ async_worker_eval() {
 	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local worker=$1; shift
+
+	return 0
 
 	local -a cmd
 	cmd=("$@")
@@ -464,6 +481,8 @@ async_flush_jobs() {
 async_start_worker() {
 	setopt localoptions noshwordsplit
 
+	return 0
+
 	local worker=$1; shift
 	zpty -t $worker &>/dev/null && return
 
@@ -522,6 +541,8 @@ async_start_worker() {
 #
 async_stop_worker() {
 	setopt localoptions noshwordsplit
+
+	return 0
 
 	local ret=0 worker k v
 	for worker in $@; do
