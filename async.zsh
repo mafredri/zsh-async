@@ -45,7 +45,7 @@ _async_job() {
 		duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 		# Grab mutex lock, stalls until token is available.
-		read -r -k 1 -p tok || exit 1
+		read -r -s -k 1 -p tok || exit 1
 
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
 		print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
@@ -141,7 +141,7 @@ _async_worker() {
 
 		# Grab lock to prevent half-written output in case a child
 		# process is in the middle of writing to stdin during kill.
-		(( coproc_pid )) && read -r -k 1 -p tok
+		(( coproc_pid )) && read -r -s -k 1 -p tok
 
 		kill -HUP -$$  # Send to entire process group.
 		coproc :       # Quit coproc.
@@ -152,7 +152,7 @@ _async_worker() {
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
-		read -r -d $'\0' request || {
+		read -r -s -d $'\0' request || {
 			# Since we handle SIGHUP above (and thus do not know when `zpty -d`)
 			# occurs, a failure to read probably indicates that stdin has
 			# closed. This is why we propagate the signal to all children and
@@ -244,15 +244,29 @@ async_process_results() {
 	local worker=$1
 	local callback=$2
 	local caller=$3
+	local fd=$4
 	local -a items
 	local null=$'\0' data
+	local oldifs=$IFS
 	integer -l len pos num_processed has_next
 
 	typeset -gA ASYNC_PROCESS_BUFFER
 
-	# Read output from zpty and parse it if available.
-	while zpty -r -t $worker data 2>/dev/null; do
+	# while zpty -r -t $worker data 2>/dev/null; do
+	while :; do
+		IFS=
+		read -r -t -u $fd data && {
+			print "$0: read returned 0"
+		}
+		IFS=$oldifs
+
+		if [[ -z $data ]]; then
+			break
+		fi
+
+		# typeset -p data
 		ASYNC_PROCESS_BUFFER[$worker]+=$data
+		data=
 		len=${#ASYNC_PROCESS_BUFFER[$worker]}
 		pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
 
@@ -303,7 +317,8 @@ async_process_results() {
 _async_zle_watcher() {
 	setopt localoptions noshwordsplit
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
-	local worker=$ASYNC_PTYS[$1]
+	local fd=$1
+	local worker=$ASYNC_PTYS[$fd]
 	local callback=$ASYNC_CALLBACKS[$worker]
 
 	if [[ -n $2 ]]; then
@@ -323,7 +338,7 @@ _async_zle_watcher() {
 	fi;
 
 	if [[ -n $callback ]]; then
-		async_process_results $worker $callback watcher
+		async_process_results $worker $callback watcher $fd
 	fi
 }
 
@@ -344,8 +359,16 @@ async_job() {
 		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 	fi
 
+	local ptyfd fd w
+	for fd w in ${(kv)ASYNC_PTYS}; do
+		if [[ $w = $worker ]]; then
+			ptyfd=$fd
+		fi
+	done
+
 	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	zpty -w $worker "$cmd"$'\0'
+	print -r -u $ptyfd "$cmd"$'\0'
+	# zpty -w $worker "$cmd"$'\0'
 }
 
 #
@@ -368,8 +391,16 @@ async_worker_eval() {
 		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 	fi
 
+	local ptyfd fd w
+	for fd w in ${(kv)ASYNC_PTYS}; do
+		if [[ $w = $worker ]]; then
+			ptyfd=$fd
+		fi
+	done
+
 	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	zpty -w $worker "_async_eval $cmd"$'\0'
+	print -r -u $ptyfd "_async_eval $cmd"$'\0'
+	# zpty -w $worker "_async_eval $cmd"$'\0'
 }
 
 # This function traps notification signals and calls all registered callbacks
