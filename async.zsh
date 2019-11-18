@@ -37,19 +37,23 @@ _async_job() {
 	# block, after the command block has completed, the stdin for `cat` is
 	# closed, causing stderr to be appended with a $'\0' at the end to mark the
 	# end of output from this job.
-	local jobname=${ASYNC_JOB_NAME:-$1}
-	local stdout stderr ret tok
-	{
-		stdout=$(eval "$@")
-		ret=$?
-		duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
+	local jobname=${ASYNC_JOB_NAME:-$1} out
+	out="$(
+		local stdout stderr ret tok
+		{
+			stdout=$(eval "$@")
+			ret=$?
+			duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
-		# Grab mutex lock, stalls until token is available.
-		read -r -k 1 -p tok || exit 1
+			print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
+		} 2> >(stderr=$(cat); print -r -n - " "${(q)stderr}$'\0')
+	)"
 
-		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-		print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
-	} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
+	# Grab mutex lock, stalls until token is available.
+	read -r -k 1 -p tok || exit 1
+
+	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
+	print -r -n - "$out"
 
 	# Unlock mutex by inserting a token.
 	print -n -p $tok
