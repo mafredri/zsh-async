@@ -139,20 +139,6 @@ test_async_process_results_stress() {
 	integer iter=40 timeout=5
 	for i in {1..$iter}; do
 		async_job test "print -n $i"
-
-		# TODO: Figure out how we can remove sleep & process here.
-
-		# If we do not sleep here, we end up losing some of the commands sent to
-		# async_job (~90 get sent). This could possibly be due to the zpty
-		# buffer being full (see below).
-		sleep 0.00001
-		# Without processing resuls we occasionally run into 'print -n 39'
-		# failing due to the command name and exit status missing. Sample output
-		# from processing for 39 (stdout, time, stderr):
-		#   $'39 0.0056798458 '
-		# This is again, probably due to the zpty buffer being full, we only
-		# need to ensure that not too many commands are run before we process.
-		(( iter % 6 == 0 )) && async_process_results test cb
 	done
 
 	float start=$EPOCHSECONDS
