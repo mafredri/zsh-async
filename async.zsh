@@ -349,12 +349,6 @@ _async_send_job() {
 	local worker=$2
 	shift 2
 
-	local -a cmd
-	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
-
 	zpty -t $worker || {
 		typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 		local callback=$ASYNC_CALLBACKS[$worker]
@@ -363,11 +357,11 @@ _async_send_job() {
 			$callback '[async]' 3 "" 0 "$0:$LINENO: error: no such worker: $worker" 0
 		else
 			print -u2 "$caller: no sych async worker: $worker"
-			return 1
 		fi
+		return 1
 	}
 
-	zpty -w $worker "$cmd"$'\0'
+	zpty -w $worker "$@"$'\0'
 }
 
 #
@@ -381,7 +375,13 @@ async_job() {
 
 	local worker=$1; shift
 
-	_async_send_job $0 $worker "$@"
+	local -a cmd
+	cmd=("$@")
+	if (( $#cmd > 1 )); then
+		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
+	fi
+
+	_async_send_job $0 $worker "$cmd"
 }
 
 #
@@ -398,7 +398,13 @@ async_worker_eval() {
 
 	local worker=$1; shift
 
-	_async_send_job $0 $worker _async_eval "$@"
+	local -a cmd
+	cmd=("$@")
+	if (( $#cmd > 1 )); then
+		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
+	fi
+
+	_async_send_job $0 $worker "_async_eval $cmd"
 }
 
 # This function traps notification signals and calls all registered callbacks
