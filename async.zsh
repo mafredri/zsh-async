@@ -319,7 +319,7 @@ _async_zle_watcher() {
 		async_stop_worker $worker
 
 		if [[ -n $callback ]]; then
-			$callback '[async]' 2 "" 0 "$worker:zle -F $1 returned error $2" 0
+			$callback '[async]' 2 "" 0 "$0:$LINENO: error: fd for $worker failed: zle -F $1 returned error $2" 0
 		fi
 		return
 	fi;
@@ -327,6 +327,34 @@ _async_zle_watcher() {
 	if [[ -n $callback ]]; then
 		async_process_results $worker $callback watcher
 	fi
+}
+
+_async_send_job() {
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+
+	local caller=$1
+	local worker=$2
+	shift 2
+
+	local -a cmd
+	cmd=("$@")
+	if (( $#cmd > 1 )); then
+		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
+	fi
+
+	zpty -t $worker || {
+		typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
+		local callback=$ASYNC_CALLBACKS[$worker]
+
+		if [[ -n $callback ]]; then
+			$callback '[async]' 3 "" 0 "$0:$LINENO: error: no such worker: $worker" 0
+		else
+			print -u2 "$caller: no sych async worker: $worker"
+			return 1
+		fi
+	}
+
+	zpty -w $worker "$cmd"$'\0'
 }
 
 #
@@ -340,14 +368,7 @@ async_job() {
 
 	local worker=$1; shift
 
-	local -a cmd
-	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
-
-	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	zpty -w $worker "$cmd"$'\0'
+	_async_send_job $0 $worker "$@"
 }
 
 #
@@ -364,14 +385,7 @@ async_worker_eval() {
 
 	local worker=$1; shift
 
-	local -a cmd
-	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
-
-	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	zpty -w $worker "_async_eval $cmd"$'\0'
+	_async_send_job $0 $worker _async_eval "$@"
 }
 
 # This function traps notification signals and calls all registered callbacks
