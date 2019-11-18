@@ -46,8 +46,12 @@ _async_job() {
 			duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 			print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
-		} 2> >(stderr=$(cat); print -r -n - " "${(q)stderr}$'\0')
+		} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
 	)"
+	if [[ $out != $'\0'*$'\0' ]]; then
+		# Corrupted output (probably a aborted job?), skipping.
+		return
+	fi
 
 	# Grab mutex lock, stalls until token is available.
 	read -r -k 1 -p tok || exit 1
@@ -162,7 +166,12 @@ _async_worker() {
 			# closed. This is why we propagate the signal to all children and
 			# exit manually.
 			kill -HUP -$$  # Send SIGHUP to all jobs.
-			exit 0
+
+			# We can no longer read on the fd, but in case this was
+			# a crash, let's try to send our last hurrah.
+			print -r -n $'\0'"'[async]'" $(( 127 + 3 )) "''" 0 "'$0:$LINENO: zpty fd died, exiting'"$'\0'
+
+			exit $(( 127 + 3 ))  # Let's pretend we SIGQUIT.
 		}
 
 		# Check for non-job commands sent to worker
