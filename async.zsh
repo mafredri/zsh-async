@@ -175,9 +175,11 @@ _async_worker() {
 		# Name of the job (first argument).
 		local job=$cmd[1]
 
-		# If worker should perform unique jobs
-		if (( unique )); then
-			# Check if a previous job is still running, if yes, let it finnish
+		# Check if a worker should perform unique jobs, unless
+		# this is an eval since they run synchronously.
+		if (( !do_eval )) && (( unique )); then
+			# Check if a previous job is still running, if yes,
+			# skip this job and let the previous one finish.
 			for pid in ${${(v)jobstates##*:*:}%\=*}; do
 				if [[ ${storage[$job]} == $pid ]]; then
 					continue 2
