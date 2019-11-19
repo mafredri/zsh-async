@@ -404,6 +404,7 @@ async_worker_eval() {
 		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 	fi
 
+	# Quote the cmd in case RC_EXPAND_PARAM is set.
 	_async_send_job $0 $worker "_async_eval $cmd"
 }
 
