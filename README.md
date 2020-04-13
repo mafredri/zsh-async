@@ -85,7 +85,7 @@ The `callback_function` is called with the following parameters:
 
 Possible error return codes for the job name `[async]`:
 
-* `1` Corrupted worker output.
+* `1` Corrupt worker output.
 * `2` ZLE watcher detected an error on the worker fd.
 * `3` Response from async_job when worker is missing.
 * `130` Async worker crashed, this should not happen but it can mean the file descriptor has become corrupt. This must be followed by a `async_stop_worker [name]` and then the worker and tasks should be restarted. It is unknown why this happens.
