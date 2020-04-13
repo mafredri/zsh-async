@@ -194,6 +194,11 @@ _async_worker() {
 			return $(( 127 + 1 ))
 		}
 
+		# We need to clean the input here because sometimes when a zpty
+		# has died and been respawned, messages will be prefixed with a
+		# carraige return (\r, or \C-M).
+		request=${request#$'\C-M'}
+
 		# Check for non-job commands sent to worker
 		case $request in
 			_unset_trap)  notify_parent=0; continue;;
