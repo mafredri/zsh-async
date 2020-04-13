@@ -526,7 +526,8 @@ async_start_worker() {
 	setopt localoptions noshwordsplit
 
 	local worker=$1; shift
-	local args=($@)
+	local -a args
+	args=("$@")
 	zpty -t $worker &>/dev/null && return
 
 	typeset -gA ASYNC_PTYS
