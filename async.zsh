@@ -132,12 +132,13 @@ _async_worker() {
 	# Register a SIGCHLD trap to handle the completion of child processes.
 	trap child_exit CHLD
 
-	# Process option parameters passed to worker
-	while getopts "np:u" opt; do
+	# Process option parameters passed to worker.
+	while getopts "np:uz" opt; do
 		case $opt in
 			n) notify_parent=1;;
 			p) parent_pid=$OPTARG;;
 			u) unique=1;;
+			z) notify_parent=0;;  # Uses ZLE watcher instead.
 		esac
 	done
 
@@ -201,7 +202,6 @@ _async_worker() {
 
 		# Check for non-job commands sent to worker
 		case $request in
-			_unset_trap)  notify_parent=0; continue;;
 			_killjobs)    killjobs; continue;;
 			_async_eval*) do_eval=1;;
 		esac
@@ -526,6 +526,7 @@ async_start_worker() {
 	setopt localoptions noshwordsplit
 
 	local worker=$1; shift
+	local args=($@)
 	zpty -t $worker &>/dev/null && return
 
 	typeset -gA ASYNC_PTYS
@@ -539,15 +540,21 @@ async_start_worker() {
 		unsetopt xtrace
 	}
 
-	if (( ! ASYNC_ZPTY_RETURNS_FD )) && [[ -o interactive ]] && [[ -o zle ]]; then
-		# When zpty doesn't return a file descriptor (on older versions of zsh)
-		# we try to guess it anyway.
-		integer -l zptyfd
-		exec {zptyfd}>&1  # Open a new file descriptor (above 10).
-		exec {zptyfd}>&-  # Close it so it's free to be used by zpty.
+	if [[ -o interactive ]] && [[ -o zle ]]; then
+		# Inform the worker to ignore the notify flag and that we're
+		# using a ZLE watcher instead.
+		args+=(-z)
+
+		if (( ! ASYNC_ZPTY_RETURNS_FD )); then
+			# When zpty doesn't return a file descriptor (on older versions of zsh)
+			# we try to guess it anyway.
+			integer -l zptyfd
+			exec {zptyfd}>&1  # Open a new file descriptor (above 10).
+			exec {zptyfd}>&-  # Close it so it's free to be used by zpty.
+		fi
 	fi
 
-	zpty -b $worker _async_worker -p $$ $@ || {
+	zpty -b $worker _async_worker -p $$ $args || {
 		async_stop_worker $worker
 		return 1
 	}
@@ -569,9 +576,6 @@ async_start_worker() {
 
 		ASYNC_PTYS[$REPLY]=$worker        # Map the file desciptor to the worker.
 		zle -F $REPLY _async_zle_watcher  # Register the ZLE handler.
-
-		# Disable trap in favor of ZLE handler when notify is enabled (-n).
-		async_job $worker _unset_trap
 	fi
 }
 
