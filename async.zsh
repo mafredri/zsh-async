@@ -374,14 +374,14 @@ _async_send_job() {
 	local worker=$2
 	shift 2
 
-	zpty -t $worker || {
+	zpty -t $worker &>/dev/null || {
 		typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 		local callback=$ASYNC_CALLBACKS[$worker]
 
 		if [[ -n $callback ]]; then
 			$callback '[async]' 3 "" 0 "$0:$LINENO: error: no such worker: $worker" 0
 		else
-			print -u2 "$caller: no sych async worker: $worker"
+			print -u2 "$caller: no such async worker: $worker"
 		fi
 		return 1
 	}
