@@ -49,7 +49,7 @@ _async_job() {
 		} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
 	)"
 	if [[ $out != $'\0'*$'\0' ]]; then
-		# Corrupted output (probably a aborted job?), skipping.
+		# Corrupted output (aborted job?), skipping.
 		return
 	fi
 
