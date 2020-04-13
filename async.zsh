@@ -54,7 +54,7 @@ _async_job() {
 	fi
 
 	# Grab mutex lock, stalls until token is available.
-	read -r -k 1 -p tok || exit 1
+	read -r -k 1 -p tok || return 1
 
 	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
 	print -r -n - "$out"
@@ -141,6 +141,23 @@ _async_worker() {
 		esac
 	done
 
+	# Terminate all running jobs, note that this function does not
+	# reinstall the child trap.
+	terminate_jobs() {
+		trap - CHLD   # Ignore child exits during kill.
+		coproc :      # Quit coproc.
+		coproc_pid=0  # Reset pid.
+
+		if is-at-least 5.4.1; then
+			trap '' HUP    # Catch the HUP sent to this process.
+			kill -HUP -$$  # Send to entire process group.
+			trap - HUP     # Disable HUP trap.
+		else
+			# We already handle HUP for Zsh < 5.4.1.
+			kill -HUP -$$  # Send to entire process group.
+		fi
+	}
+
 	killjobs() {
 		local tok
 		local -a pids
@@ -154,9 +171,8 @@ _async_worker() {
 		# process is in the middle of writing to stdin during kill.
 		(( coproc_pid )) && read -r -k 1 -p tok
 
-		kill -HUP -$$  # Send to entire process group.
-		coproc :       # Quit coproc.
-		coproc_pid=0   # Reset pid.
+		terminate_jobs
+		trap child_exit CHLD  # Reinstall child trap.
 	}
 
 	local request do_eval=0
@@ -164,17 +180,18 @@ _async_worker() {
 	while :; do
 		# Wait for jobs sent by async_job.
 		read -r -d $'\0' request || {
-			# Since we handle SIGHUP above (and thus do not know when `zpty -d`)
-			# occurs, a failure to read probably indicates that stdin has
-			# closed. This is why we propagate the signal to all children and
-			# exit manually.
-			kill -HUP -$$  # Send SIGHUP to all jobs.
+			# Unknown error occurred while reading from stdin, the zpty
+			# worker is likely in a broken state, so we shut down.
+			terminate_jobs
 
-			# We can no longer read on the fd, but in case this was
-			# a crash, let's try to send our last hurrah.
+			# Stdin is broken and in case this was an unintended
+			# crash, we try to report it as a last hurrah.
 			print -r -n $'\0'"'[async]'" $(( 127 + 3 )) "''" 0 "'$0:$LINENO: zpty fd died, exiting'"$'\0'
 
-			exit $(( 127 + 3 ))  # Let's pretend we SIGQUIT.
+			# We use `return` to abort here because using `exit` may
+			# result in an infinite loop that never exits and, as a
+			# result, high CPU utilization.
+			return $(( 127 + 1 ))
 		}
 
 		# Check for non-job commands sent to worker
