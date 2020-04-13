@@ -83,6 +83,13 @@ The `callback_function` is called with the following parameters:
 * `$6` has next result in buffer (0 = buffer empty, 1 = yes)
   * This means another async job has completed and is pending in the buffer, it's very likely that your callback function will be called a second time (or more) in this execution. It's generally a good idea to e.g. delay prompt updates (`zle reset-prompt`) until the buffer is empty to prevent strange states in ZLE.
 
+Possible error return codes for the job name `[async]`:
+
+* `1` Corrupt worker output.
+* `2` ZLE watcher detected an error on the worker fd.
+* `3` Response from async_job when worker is missing.
+* `130` Async worker crashed, this should not happen but it can mean the file descriptor has become corrupt. This must be followed by a `async_stop_worker [name]` and then the worker and tasks should be restarted. It is unknown why this happens.
+
 #### `async_register_callback <worker_name> <callback_function>`
 
 Register a callback for completed jobs. As soon as a job is finished, `async_process_results` will be called with the specified callback function. This requires that a worker is initialized with the -n (notify) option.

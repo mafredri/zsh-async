@@ -240,9 +240,10 @@ run_test_module() {
 }
 
 cleanup() {
+	trap '' HUP
+	kill -HUP -$$ 2>/dev/null
 	trap - HUP
 	kill -HUP $$ 2>/dev/null
-	kill -HUP -$$ 2>/dev/null
 }
 
 trap cleanup EXIT INT HUP QUIT TERM USR1
@@ -260,4 +261,7 @@ for tf in ${~TEST_GLOB}/*_test.(zsh|sh); do
 	(( $? )) && failed=1
 done
 
+trap - EXIT
+trap '' HUP
+kill -HUP -$$ 2>/dev/null
 exit $failed
