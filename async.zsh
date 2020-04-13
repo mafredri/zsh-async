@@ -83,7 +83,7 @@ _async_worker() {
 	# worker would simply exit (stop working) even though visible in the list
 	# of zpty's (zpty -L). This has been fixed around the time of Zsh 5.4
 	# (not released).
-	if is-at-least 5.4.1; then
+	if ! is-at-least 5.4.1; then
 		TRAPHUP() {
 			return 0  # Return 0, indicating signal was handled.
 		}
