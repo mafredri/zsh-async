@@ -3,12 +3,12 @@
 #
 # zsh-async
 #
-# version: 1.8.0-dev1
+# version: 1.8.0-dev2
 # author: Mathias Fredriksson
 # url: https://github.com/mafredri/zsh-async
 #
 
-typeset -g ASYNC_VERSION=1.8.0-dev1
+typeset -g ASYNC_VERSION=1.8.0-dev2
 # Produce debug output from zsh-async when set to 1.
 typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
 
