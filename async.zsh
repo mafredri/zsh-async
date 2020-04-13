@@ -81,10 +81,13 @@ _async_worker() {
 	# When a zpty is deleted (using -d) all the zpty instances created before
 	# the one being deleted receive a SIGHUP, unless we catch it, the async
 	# worker would simply exit (stop working) even though visible in the list
-	# of zpty's (zpty -L).
-	TRAPHUP() {
-		return 0  # Return 0, indicating signal was handled.
-	}
+	# of zpty's (zpty -L). This has been fixed around the time of Zsh 5.4
+	# (not released).
+	if is-at-least 5.4.1; then
+		TRAPHUP() {
+			return 0  # Return 0, indicating signal was handled.
+		}
+	fi
 
 	local -A storage
 	local unique=0
@@ -530,7 +533,7 @@ async_start_worker() {
 	# Re-enable it if it was enabled, for debugging.
 	(( has_xtrace )) && setopt xtrace
 
-	if [[ $ZSH_VERSION < 5.0.8 ]]; then
+	if ! is-at-least 5.0.8; then
 		# For ZSH versions older than 5.0.8 we delay a bit to give
 		# time for the worker to start before issuing commands,
 		# otherwise it will not be ready to receive them.
@@ -591,6 +594,9 @@ async_init() {
 
 	zmodload zsh/zpty
 	zmodload zsh/datetime
+
+	# Load is-at-least for reliable version check.
+	autoload -Uz is-at-least
 
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
