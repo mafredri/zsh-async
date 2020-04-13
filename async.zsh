@@ -375,7 +375,7 @@ _async_send_job() {
 	shift 2
 
 	zpty -t $worker &>/dev/null || {
-		typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
+		typeset -gA ASYNC_CALLBACKS
 		local callback=$ASYNC_CALLBACKS[$worker]
 
 		if [[ -n $callback ]]; then
@@ -453,7 +453,7 @@ _async_notify_trap() {
 async_register_callback() {
 	setopt localoptions noshwordsplit nolocaltraps
 
-	typeset -gA ASYNC_CALLBACKS
+	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 	local worker=$1; shift
 
 	ASYNC_CALLBACKS[$worker]="$*"
@@ -462,6 +462,14 @@ async_register_callback() {
 	# workers to notify (via -n) when a job is done.
 	if [[ ! -o interactive ]] || [[ ! -o zle ]]; then
 		trap '_async_notify_trap' WINCH
+	elif [[ -o interactive ]] && [[ -o zle ]]; then
+		local fd w
+		for fd w in ${(@kv)ASYNC_PTYS}; do
+			if [[ $w == $worker ]]; then
+				zle -F $fd _async_zle_watcher  # Register the ZLE handler.
+				break
+			fi
+		done
 	fi
 }
 
@@ -575,8 +583,7 @@ async_start_worker() {
 			REPLY=$zptyfd  # Use the guessed value for the file desciptor.
 		fi
 
-		ASYNC_PTYS[$REPLY]=$worker        # Map the file desciptor to the worker.
-		zle -F $REPLY _async_zle_watcher  # Register the ZLE handler.
+		ASYNC_PTYS[$REPLY]=$worker  # Map the file desciptor to the worker.
 	fi
 }
 
