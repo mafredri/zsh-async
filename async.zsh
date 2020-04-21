@@ -373,6 +373,7 @@ _async_send_job() {
 	local caller=$1
 	local worker=$2
 	shift 2
+	local -a cmd=("$@")
 
 	zpty -t $worker &>/dev/null || {
 		typeset -gA ASYNC_CALLBACKS
@@ -386,7 +387,7 @@ _async_send_job() {
 		return 1
 	}
 
-	zpty -w $worker "$@"$'\0'
+	zpty -w $worker "$cmd"$'\0'
 }
 
 #
