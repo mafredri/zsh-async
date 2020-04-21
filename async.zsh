@@ -585,6 +585,15 @@ async_start_worker() {
 
 		ASYNC_PTYS[$REPLY]=$worker  # Map the file desciptor to the worker.
 	fi
+
+	local junk
+	if zpty -r -t $worker junk '*'; then
+		(( ASYNC_DEBUG )) && print -n "async_flush_jobs $worker: ${(V)junk}"
+		while zpty -r -t $worker junk '*'; do
+			(( ASYNC_DEBUG )) && print -n "${(V)junk}"
+		done
+		(( ASYNC_DEBUG )) && print
+	fi
 }
 
 #
