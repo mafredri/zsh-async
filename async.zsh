@@ -569,6 +569,7 @@ async_start_worker() {
 	# See https://github.com/mafredri/zsh-async/issues/35.
 	exec {errfd}>&2
 	zpty -b $worker _async_worker -p $$ $args 2>&$errfd || {
+		exec {errfd}>& -
 		async_stop_worker $worker
 		return 1
 	}
