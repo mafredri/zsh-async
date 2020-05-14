@@ -563,10 +563,16 @@ async_start_worker() {
 		fi
 	fi
 
-	zpty -b $worker _async_worker -p $$ $args || {
+	# Workaround for stderr in the main shell sometimes (incorrectly) being
+	# reassigned to /dev/null by the reassignment done inside the async
+	# worker.
+	# See https://github.com/mafredri/zsh-async/issues/35.
+	exec {errfd}>&2
+	zpty -b $worker _async_worker -p $$ $args 2>&$errfd || {
 		async_stop_worker $worker
 		return 1
 	}
+	exec {errfd}>& -
 
 	# Re-enable it if it was enabled, for debugging.
 	(( has_xtrace )) && setopt xtrace
