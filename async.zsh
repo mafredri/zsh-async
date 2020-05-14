@@ -567,6 +567,7 @@ async_start_worker() {
 	# reassigned to /dev/null by the reassignment done inside the async
 	# worker.
 	# See https://github.com/mafredri/zsh-async/issues/35.
+	integer errfd
 	exec {errfd}>&2
 	zpty -b $worker _async_worker -p $$ $args 2>&$errfd || {
 		exec {errfd}>& -
