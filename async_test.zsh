@@ -584,6 +584,9 @@ zpty_deinit() {
 }
 
 test_zle_watcher() {
+	t_skip "Test is not reliable on zsh 5.0.X"
+
+	setopt localoptions
 	zpty_init '
 		emulate -R zsh
 		setopt zle
