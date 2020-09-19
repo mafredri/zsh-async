@@ -472,8 +472,6 @@ test_async_worker_update_pwd_and_env() {
 		async_process_results test1 cb
 	done
 
-	typeset -p eval_out
-
 	(( $#result == 2 )) || t_error "wanted 2 results, got ${#result}"
 	[[ $result[2] = $input ]] || t_error "wanted second print to output ${(q-)input}, got ${(q-)result[2]}"
 	[[ $result[1] != $result[2] ]] || t_error "wanted worker to change env, was ${(q-)result[1]}, got ${(q-)result[2]}"
