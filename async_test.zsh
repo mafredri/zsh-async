@@ -447,6 +447,38 @@ test_async_worker_update_pwd() {
 	[[ $result[1] != $result[2] ]] || t_error "wanted worker to change pwd, was ${(q)result[1]}, got ${(q)result[2]}"
 }
 
+test_async_worker_update_pwd_and_env() {
+	local -a result
+	local eval_out
+	cb() {
+		if [[ $1 == '[async/eval]' ]]; then
+			eval_out="$3"
+		else
+			result+=("$3")
+		fi
+	}
+
+	input=$'my\ninput'
+
+	async_start_worker test1
+	t_defer async_stop_worker test1
+
+	async_job test1 "print -n $myenv"
+	async_worker_eval test1 "cd ..; export myenv=${(q)input}"
+	async_job test1 'print -n $myenv'
+
+	start=$EPOCHREALTIME
+	while (( EPOCHREALTIME - start < 2.0 && $#result < 2 )); do
+		async_process_results test1 cb
+	done
+
+	typeset -p eval_out
+
+	(( $#result == 2 )) || t_error "wanted 2 results, got ${#result}"
+	[[ $result[2] = $input ]] || t_error "wanted second print to output ${(q-)input}, got ${(q-)result[2]}"
+	[[ $result[1] != $result[2] ]] || t_error "wanted worker to change env, was ${(q-)result[1]}, got ${(q-)result[2]}"
+}
+
 setopt_helper() {
 	setopt localoptions $1
 
