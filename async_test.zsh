@@ -569,6 +569,13 @@ zpty_init() {
 		t_log "prompt missing"
 		return 1
 	}
+
+	local junk
+	if zpty -r -t zsh junk '*'; then
+		while zpty -r -t zsh junk '*'; do
+			# Noop.
+		done
+	fi
 }
 
 zpty_run() {
