@@ -437,7 +437,7 @@ test_async_worker_update_pwd() {
 	async_job test1 'print $PWD'
 
 	start=$EPOCHREALTIME
-	while (( EPOCHREALTIME - start < 2.0 && $#result < 3 )); do
+	while (( EPOCHREALTIME - start < 2.0 && $#result < 2 )); do
 		async_process_results test1 cb
 	done
 
