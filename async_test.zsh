@@ -472,8 +472,6 @@ test_async_worker_update_pwd_and_env() {
 		async_process_results test1 cb
 	done
 
-	typeset -p eval_out
-
 	(( $#result == 2 )) || t_error "wanted 2 results, got ${#result}"
 	[[ $result[2] = $input ]] || t_error "wanted second print to output ${(q-)input}, got ${(q-)result[2]}"
 	[[ $result[1] != $result[2] ]] || t_error "wanted worker to change env, was ${(q-)result[1]}, got ${(q-)result[2]}"
@@ -569,6 +567,13 @@ zpty_init() {
 		t_log "prompt missing"
 		return 1
 	}
+
+	local junk
+	if zpty -r -t zsh junk '*'; then
+		while zpty -r -t zsh junk '*'; do
+			# Noop.
+		done
+	fi
 }
 
 zpty_run() {
@@ -584,6 +589,9 @@ zpty_deinit() {
 }
 
 test_zle_watcher() {
+	t_skip "Test is not reliable on zsh 5.0.X"
+
+	setopt localoptions
 	zpty_init '
 		emulate -R zsh
 		setopt zle
