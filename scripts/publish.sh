@@ -4,6 +4,8 @@ setopt errexit
 
 0=${(%):-%N}
 
+REPO=mafredri/zsh-async
+
 run() {
 	dirty="$(git status --porcelain | grep -v '^??')" || true
 	if [[ -n $dirty ]]; then
@@ -42,14 +44,15 @@ run() {
 	git push --follow-tags
 
 	changes=(${(f)"$(git log --format='* %s %h' v${v}...v${nv}~1)"})
+	body=($changes '' https://github.com/${REPO}/compare/v${v}...v${nv})
 
 	typeset -a params=(
 		tag=v${nv}
 		title=v${nv}
-		body="$(urlencode ${(F)changes})"
+		body="$(urlencode ${(F)body})"
 	)
 
-	open https://github.com/mafredri/zsh-async/releases/new'?'${(j.&.)params}
+	open https://github.com/${REPO}/releases/new'?'${(j.&.)params}
 }
 
 # https://stackoverflow.com/questions/28971539/zsh-script-to-encode-full-file-path
