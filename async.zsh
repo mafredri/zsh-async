@@ -561,7 +561,11 @@ async_start_worker() {
 	# worker.
 	# See https://github.com/mafredri/zsh-async/issues/35.
 	integer errfd=-1
-	exec {errfd}>&2
+
+	# Redirect of errfd is broken on zsh 5.0.2.
+	if is-at-least 5.0.8; then
+		exec {errfd}>&2
+	fi
 
 	# Make sure async worker is started without xtrace
 	# (the trace output interferes with the worker).
@@ -570,12 +574,16 @@ async_start_worker() {
 		unsetopt xtrace
 	}
 
-	zpty -b $worker _async_worker -p $$ $args 2>&$errfd
+	if (( errfd != -1 )); then
+		zpty -b $worker _async_worker -p $$ $args 2>&$errfd
+	else
+		zpty -b $worker _async_worker -p $$ $args
+	fi
 	local ret=$?
 
 	# Re-enable it if it was enabled, for debugging.
 	(( has_xtrace )) && setopt xtrace
-	exec {errfd}>& -
+	(( errfd != -1 )) && exec {errfd}>& -
 
 	if (( ret )); then
 		async_stop_worker $worker
