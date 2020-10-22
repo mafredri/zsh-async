@@ -13,7 +13,8 @@ typeset -g ASYNC_VERSION=1.8.5
 typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
 
 # The maximum buffer size when outputing to zpty.
-typeset -g ASYNC_MAX_BUFFER_SIZE=$((1024))
+# Note: Subtract 4 to accomodate "\r\n" times two.
+typeset -g ASYNC_MAX_BUFFER_SIZE=$((1024 - 4))
 
 # Execute commands that can manipulate the environment inside the async worker. Return output via callback.
 _async_eval() {
@@ -64,8 +65,13 @@ _async_job() {
 
 	# Chunk up the output so as to not fill up the entire fd.
 	for ((i = 1; i < $#out; i += ASYNC_MAX_BUFFER_SIZE)); do
+		# Note: We are surrounding the message in newlines here in an
+		# attempt to force zpty to behave. Literal newlines will be
+		# filtered by async_process_results. Any newlines in the job
+		# output will survive, as they are quoted.
+		#
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-		if ! print -r -n - "${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"; then
+		if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
 			# BUG(mafredri): The worker and parent process should be informed.
 			break
 		fi
@@ -307,7 +313,8 @@ async_process_results() {
 
 	# Read output from zpty and parse it if available.
 	while zpty -r -t $worker data 2>/dev/null; do
-		ASYNC_PROCESS_BUFFER[$worker]+=$data
+		# Trim newlines that are not part of the data.
+		ASYNC_PROCESS_BUFFER[$worker]+=${${data//$'\r'/}//$'\n'/}
 		len=${#ASYNC_PROCESS_BUFFER[$worker]}
 		pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
 
