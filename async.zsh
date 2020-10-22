@@ -11,6 +11,8 @@
 typeset -g ASYNC_VERSION=1.8.5
 # Produce debug output from zsh-async when set to 1.
 typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
+# When ASYNC_DEBUG=1, worker stderr output will be redirected here.
+typeset -g ASYNC_DEBUG_WORKER_STDERR=${ASYNC_DEBUG_WORKER_STDERR:-/dev/null}
 
 # The maximum buffer size when outputing to zpty.
 # Note: Subtract 4 to accomodate "\r\n" times two.
@@ -29,9 +31,6 @@ _async_eval() {
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
-	# Disable xtrace as it would mangle the output.
-	setopt localoptions noxtrace
-
 	# Store start time for job.
 	float -F duration=$EPOCHREALTIME
 
@@ -47,6 +46,10 @@ _async_job() {
 	local jobname=${ASYNC_JOB_NAME:-$1} out
 	out="$(
 		local stdout stderr ret tok
+
+		# Disable xtrace as it would mangle the stderr. The user can
+		# still enable xtrace inside the async job, if required.
+		setopt noxtrace
 		{
 			stdout=$(eval "$@")
 			ret=$?
@@ -108,7 +111,14 @@ _async_worker() {
 	# worker. For example: `fork failed: resource temporarily unavailable`.
 	# Some older versions of zsh might also print malloc errors (know to happen
 	# on at least zsh 5.0.2 and 5.0.8) likely due to kill signals.
-	exec 2>/dev/null
+	if ((ASYNC_DEBUG)); then
+		exec 2>>${ASYNC_DEBUG_WORKER_STDERR}
+		if [[ $ASYNC_DEBUG_WORKER_STDERR != /dev/null ]]; then
+			setopt xtrace
+		fi
+	else
+		exec 2>/dev/null
+	fi
 
 	# When a zpty is deleted (using -d) all the zpty instances created before
 	# the one being deleted receive a SIGHUP, unless we catch it, the async
