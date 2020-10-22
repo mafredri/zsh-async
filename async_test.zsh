@@ -1,13 +1,16 @@
 #!/usr/bin/env zsh
 
+autoload -Uz is-at-least
+
 test__async_job_print_hi() {
 	coproc cat
 	print -n -p t  # Insert token into coproc.
 
 	local line
 	local -a out
-	line=$(_async_job print hi)
+	line=$(_async_job 0 print hi)
 	# Remove leading/trailing null, parse, unquote and interpret as array.
+	line=${${line//$'\r'}//$'\n'}
 	line=$line[2,$#line-1]
 	out=("${(@Q)${(z)line}}")
 
@@ -24,8 +27,9 @@ test__async_job_stderr() {
 
 	local line
 	local -a out
-	line=$(_async_job print 'hi 1>&2')
+	line=$(_async_job 0 print 'hi 1>&2')
 	# Remove trailing null, parse, unquote and interpret as array.
+	line=${${line//$'\r'}//$'\n'}
 	line=$line[1,$#line-1]
 	out=("${(@Q)${(z)line}}")
 
@@ -63,8 +67,9 @@ test__async_job_multiple_commands() {
 
 	local line
 	local -a out
-	line="$(_async_job print '-n hi; for i in "1 2" 3 4; do print -n $i; done')"
+	line="$(_async_job 0 print '-n hi; for i in "1 2" 3 4; do print -n $i; done')"
 	# Remove trailing null, parse, unquote and interpret as array.
+	line=${${line//$'\r'}//$'\n'}
 	line=$line[1,$#line-1]
 	out=("${(@Q)${(z)line}}")
 
@@ -503,7 +508,7 @@ setopt_helper() {
 test_all_options() {
 	local -a opts exclude
 
-	if [[ $ZSH_VERSION == 5.0.? ]]; then
+	if ! is-at-least 5.1; then
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
@@ -589,7 +594,9 @@ zpty_deinit() {
 }
 
 test_zle_watcher() {
-	t_skip "Test is not reliable on zsh 5.0.X"
+	if ! is-at-least 5.1; then
+		t_skip "Test is not reliable on zsh 5.0.X"
+	fi
 
 	setopt localoptions
 	zpty_init '
