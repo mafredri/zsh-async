@@ -298,6 +298,8 @@ test_async_job_error_and_nonzero_exit() {
 
 	while ! async_process_results test cb; do :; done
 
+	async_stop_worker test
+
 	[[ $r[1] = error ]] || t_error "want 'error', got ${(Vq-)r[1]}"
 	[[ $r[2] = 99 ]] || t_error "want exit code 99, got $r[2]"
 
