@@ -226,10 +226,15 @@ _async_worker() {
 			return $(( 127 + 1 ))
 		}
 
-		# We need to clean the input here because sometimes when a zpty
-		# has died and been respawned, messages will be prefixed with a
-		# carraige return (\r, or \C-M).
-		request=${request#$'\C-M'}
+		# Remove CRLF from the request input, any CRLF that are part of
+		# the request are escaped and won't be removed. Previously we
+		# did not escape everything and had to clean the input because
+		# sometimes when a zpty has died and been respawned, messages
+		# will be prefixed with a carraige return (\r, or \C-M).
+		request=${${request//$'\r'}//$'\n'}
+		if [[ -z $request ]]; then
+			continue
+		fi
 
 		# Check for non-job commands sent to worker
 		case $request in
@@ -237,12 +242,17 @@ _async_worker() {
 			_async_eval*) do_eval=1;;
 		esac
 
-		# Parse the request using shell parsing (z) to allow commands
-		# to be parsed from single strings and multi-args alike.
-		cmd=("${(z)request}")
-
-		# Name of the job (first argument).
-		job=$cmd[1]
+		# Check if request is a script argument.
+		if [[ $request == '-s '* ]]; then
+			cmd=("${(Qz)request}")
+			shift cmd
+			job=$cmd[1]  # Legacy, name of first command...
+		else
+			# Parse the request using shell parsing (z) to allow commands
+			# to be parsed from single strings and multi-args alike.
+			cmd=("${(z)request}")
+			job=$cmd[1]
+		fi
 
 		# Check if a worker should perform unique jobs, unless
 		# this is an eval since they run synchronously.
@@ -418,14 +428,19 @@ _async_send_job() {
 		return 1
 	}
 
-	zpty -w $worker "$@"$'\0'
+	# The command is surrounded in newlines to enourage better
+	# behavior from the zpty worker, these are later stripped.
+	zpty -w $worker $'\n'"$@"$'\0\n'
 }
 
 #
 # Start a new asynchronous job on specified worker, assumes the worker is running.
 #
 # usage:
-# 	async_job <worker_name> <my_function> [<function_params>]
+# 	async_job <worker_name> [-s] <my_function> [<function_params>]
+#
+# opts:
+# 	-s interpret the argument as a script
 #
 async_job() {
 	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
@@ -434,21 +449,22 @@ async_job() {
 
 	local -a cmd
 	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
+	cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 
 	_async_send_job $0 $worker "$cmd"
 }
 
 #
-# Evaluate a command (like async_job) inside the async worker, then worker environment can be manipulated. For example,
+# Evaluate a command inside the async worker (similar to async_job) so that the worker environment can be manipulated. For example,
 # issuing a cd command will change the PWD of the worker which will then be inherited by all future async jobs.
 #
 # Output will be returned via callback, job name will be [async/eval].
 #
 # usage:
-# 	async_worker_eval <worker_name> <my_function> [<function_params>]
+# 	async_worker_eval <worker_name> [-s] <my_function> [<function_params>]
+#
+# opts:
+# 	-s interpret the argument as a script
 #
 async_worker_eval() {
 	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
