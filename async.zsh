@@ -232,7 +232,7 @@ _async_worker() {
 		# recreate it when there are no other jobs running.
 		if (( ! coproc_pid )); then
 			# Use coproc as a mutex for synchronized output between children.
-			coproc command cat
+			coproc command -p cat
 			coproc_pid="$!"
 			# Insert token into coproc
 			print -n -p "t"
