@@ -207,7 +207,7 @@ _async_worker() {
 		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
-	local request do_eval=0
+	local request job do_eval=0
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
@@ -242,7 +242,7 @@ _async_worker() {
 		cmd=("${(z)request}")
 
 		# Name of the job (first argument).
-		local job=$cmd[1]
+		job=$cmd[1]
 
 		# Check if a worker should perform unique jobs, unless
 		# this is an eval since they run synchronously.
