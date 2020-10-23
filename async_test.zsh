@@ -456,7 +456,7 @@ test_async_worker_update_pwd() {
 	t_defer async_stop_worker test1
 
 	async_job test1 -s 'print $PWD'
-	async_worker_eval test1 'print -n foo; cd ..; print -n bar; print -n -u2 baz'
+	async_worker_eval test1 -s 'print -n foo; cd ..; print -n bar; print -n -u2 baz'
 	async_job test1 -s 'print $PWD'
 
 	start=$EPOCHREALTIME
@@ -487,7 +487,7 @@ test_async_worker_update_pwd_and_env() {
 	t_defer async_stop_worker test1
 
 	async_job test1 -s "print -n $myenv"
-	async_worker_eval test1 "cd ..; export myenv=${(q)input}"
+	async_worker_eval test1 -s "cd ..; export myenv=${(q)input}"
 	async_job test1 -s 'print -n $myenv'
 
 	start=$EPOCHREALTIME

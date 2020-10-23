@@ -20,6 +20,8 @@ typeset -g ASYNC_MAX_BUFFER_SIZE=$((1024 - 4))
 
 # Execute commands that can manipulate the environment inside the async worker. Return output via callback.
 _async_eval() {
+	setopt localoptions noxtrace
+
 	local ASYNC_JOB_NAME
 	# Rename job to _async_eval and redirect all eval output to cat running
 	# in _async_job. Here, stdout and stderr are not separated for
@@ -207,7 +209,7 @@ _async_worker() {
 		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
-	local request job do_eval=0
+	local request job do_eval=0 script=0
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
@@ -237,16 +239,20 @@ _async_worker() {
 		fi
 
 		# Check for non-job commands sent to worker
+		script=0
 		case $request in
-			_killjobs)    killjobs; continue;;
-			_async_eval*) do_eval=1;;
+			_killjobs)          killjobs; continue;;
+			_async_eval\ -s\ *) do_eval=1; script=1;;
+			_async_eval*)       do_eval=1;;
+			-s\ *)              script=1;;
 		esac
+		((do_eval)) && request=${request#_async_eval }
 
 		# Check if request is a script argument.
-		if [[ $request == '-s '* ]]; then
-			cmd=("${(Qz)request}")
-			shift cmd
-			job=$cmd[1]  # Legacy, name of first command...
+		if ((script)); then
+			request=${request#-s }
+			cmd=("${(Qz)request}") # Remove extra layer of quotes.
+			job=$cmd[1]            # Legacy, name of first command...
 		else
 			# Parse the request using shell parsing (z) to allow commands
 			# to be parsed from single strings and multi-args alike.
@@ -280,7 +286,6 @@ _async_worker() {
 		fi
 
 		if (( do_eval )); then
-			shift cmd  # Strip _async_eval from cmd.
 			_async_eval $cmd
 		else
 			# Run job in background, completed jobs are printed to stdout.
@@ -451,6 +456,7 @@ async_job() {
 	cmd=("$@")
 	cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 
+	# Quote the cmd in case RC_EXPAND_PARAM is set.
 	_async_send_job $0 $worker "$cmd"
 }
 
@@ -472,13 +478,11 @@ async_worker_eval() {
 	local worker=$1; shift
 
 	local -a cmd
-	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
+	cmd=(_async_eval "$@")
+	cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 
 	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	_async_send_job $0 $worker "_async_eval $cmd"
+	_async_send_job $0 $worker "$cmd"
 }
 
 # This function traps notification signals and calls all registered callbacks
