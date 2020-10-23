@@ -60,7 +60,16 @@ t_runner_init() {
 	# used to abort test execution by exec.
 	_t_runner() {
 		local -a _test_defer_funcs
+		local _test_timeout_trace _test_timeout=0
 		integer _test_errors=0
+		TRAPALRM() {
+			if ((_test_timeout)); then
+				_t_log $_test_timeout_trace "timed out after ${_test_timeout}s"
+				() { return $TEST_CODE_TIMEOUT }
+				t_done
+			fi
+			return 0
+		}
 		while read -r; do
 			eval "$REPLY"
 		done
@@ -84,7 +93,7 @@ t_runner_init() {
 	# t_skip is for skipping a test.
 	t_skip() {
 		_t_log $funcfiletrace[1] "$*"
-		() { return 100 }
+		() { return $TEST_CODE_SKIP }
 		t_done
 	}
 
@@ -97,8 +106,14 @@ t_runner_init() {
 	# t_fatal fails the test and halts execution immediately.
 	t_fatal() {
 		_t_log $funcfiletrace[1] "$*"
-		() { return 101 }
+		() { return $TEST_CODE_ERROR }
 		t_done
+	}
+
+	t_timeout() {
+		_test_timeout_trace=$funcfiletrace[1]
+		_test_timeout=$1
+		{ sleep $_test_timeout && kill -ALRM $$ } &
 	}
 
 	# t_defer takes a function (and optionally, arguments)
@@ -204,8 +219,8 @@ run_test_module() {
 
 		case $test_exit in
 			(0|1) state=PASS;;
-			(100) state=SKIP;;
-			(101|102) state=FAIL; mod_exit=1;;
+			($TEST_CODE_SKIP) state=SKIP;;
+			($TEST_CODE_ERROR|$TEST_CODE_SKIP) state=FAIL; mod_exit=1;;
 			*) state="????";;
 		esac
 
