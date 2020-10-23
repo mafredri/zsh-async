@@ -204,7 +204,7 @@ _async_worker() {
 		(( coproc_pid )) && read -r -k 1 -p tok
 
 		terminate_jobs
-		trap child_exit CHLD  # Reinstall child trap.
+		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
 	local request do_eval=0
