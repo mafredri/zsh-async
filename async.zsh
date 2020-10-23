@@ -20,6 +20,8 @@ typeset -g ASYNC_MAX_BUFFER_SIZE=$((1024 - 4))
 
 # Execute commands that can manipulate the environment inside the async worker. Return output via callback.
 _async_eval() {
+	setopt localoptions noxtrace
+
 	local ASYNC_JOB_NAME
 	# Rename job to _async_eval and redirect all eval output to cat running
 	# in _async_job. Here, stdout and stderr are not separated for
@@ -27,6 +29,14 @@ _async_eval() {
 	{
 		eval "$@"
 	} &> >(ASYNC_JOB_NAME=[async/eval] _async_job 0 'command -p cat')
+}
+
+_async_read_stderr_from_stdin_and_print() {
+	local -a stdin
+	IFS=
+	while read -r line; do
+		stdin+=("$line")
+	done && print -r -n - " ${(qpj.\n.)stdin}"$'\0'
 }
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
@@ -56,7 +66,7 @@ _async_job() {
 			duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 			print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
-		} 2> >(stderr=$(command -p cat) && print -r -n - " "${(q)stderr}$'\0')
+		} 2> >(_async_read_stderr_from_stdin_and_print)
 	)"
 	if [[ $out != $'\0'*$'\0' ]]; then
 		# Corrupted output (aborted job?), skipping.
@@ -207,7 +217,7 @@ _async_worker() {
 		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
-	local request job do_eval=0
+	local request job do_eval=0 script=0
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
@@ -226,23 +236,37 @@ _async_worker() {
 			return $(( 127 + 1 ))
 		}
 
-		# We need to clean the input here because sometimes when a zpty
-		# has died and been respawned, messages will be prefixed with a
-		# carraige return (\r, or \C-M).
-		request=${request#$'\C-M'}
+		# Remove CRLF from the request input, any CRLF that are part of
+		# the request are escaped and won't be removed. Previously we
+		# did not escape everything and had to clean the input because
+		# sometimes when a zpty has died and been respawned, messages
+		# will be prefixed with a carraige return (\r, or \C-M).
+		request=${${request//$'\r'}//$'\n'}
+		if [[ -z $request ]]; then
+			continue
+		fi
 
 		# Check for non-job commands sent to worker
+		script=0
 		case $request in
-			_killjobs)    killjobs; continue;;
-			_async_eval*) do_eval=1;;
+			_killjobs)          killjobs; continue;;
+			_async_eval\ -s\ *) do_eval=1; script=1;;
+			_async_eval*)       do_eval=1;;
+			-s\ *)              script=1;;
 		esac
+		((do_eval)) && request=${request#_async_eval }
 
-		# Parse the request using shell parsing (z) to allow commands
-		# to be parsed from single strings and multi-args alike.
-		cmd=("${(z)request}")
-
-		# Name of the job (first argument).
-		job=$cmd[1]
+		# Check if request is a script argument.
+		if ((script)); then
+			request=${request#-s }
+			cmd=("${(Qz)request}") # Remove extra layer of quotes.
+			job=$cmd[1]            # Legacy, name of first command...
+		else
+			# Parse the request using shell parsing (z) to allow commands
+			# to be parsed from single strings and multi-args alike.
+			cmd=("${(z)request}")
+			job=$cmd[1]
+		fi
 
 		# Check if a worker should perform unique jobs, unless
 		# this is an eval since they run synchronously.
@@ -270,7 +294,6 @@ _async_worker() {
 		fi
 
 		if (( do_eval )); then
-			shift cmd  # Strip _async_eval from cmd.
 			_async_eval $cmd
 		else
 			# Run job in background, completed jobs are printed to stdout.
@@ -418,14 +441,19 @@ _async_send_job() {
 		return 1
 	}
 
-	zpty -w $worker "$@"$'\0'
+	# The command is surrounded in newlines to enourage better
+	# behavior from the zpty worker, these are later stripped.
+	zpty -w $worker $'\n'"$@"$'\0\n'
 }
 
 #
 # Start a new asynchronous job on specified worker, assumes the worker is running.
 #
 # usage:
-# 	async_job <worker_name> <my_function> [<function_params>]
+# 	async_job <worker_name> [-s] <my_function> [<function_params>]
+#
+# opts:
+# 	-s interpret the argument as a script
 #
 async_job() {
 	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
@@ -434,21 +462,23 @@ async_job() {
 
 	local -a cmd
 	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
+	cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 
+	# Quote the cmd in case RC_EXPAND_PARAM is set.
 	_async_send_job $0 $worker "$cmd"
 }
 
 #
-# Evaluate a command (like async_job) inside the async worker, then worker environment can be manipulated. For example,
+# Evaluate a command inside the async worker (similar to async_job) so that the worker environment can be manipulated. For example,
 # issuing a cd command will change the PWD of the worker which will then be inherited by all future async jobs.
 #
 # Output will be returned via callback, job name will be [async/eval].
 #
 # usage:
-# 	async_worker_eval <worker_name> <my_function> [<function_params>]
+# 	async_worker_eval <worker_name> [-s] <my_function> [<function_params>]
+#
+# opts:
+# 	-s interpret the argument as a script
 #
 async_worker_eval() {
 	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
@@ -456,13 +486,11 @@ async_worker_eval() {
 	local worker=$1; shift
 
 	local -a cmd
-	cmd=("$@")
-	if (( $#cmd > 1 )); then
-		cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
-	fi
+	cmd=(_async_eval "$@")
+	cmd=(${(q)cmd})  # Quote special characters in multi argument commands.
 
 	# Quote the cmd in case RC_EXPAND_PARAM is set.
-	_async_send_job $0 $worker "_async_eval $cmd"
+	_async_send_job $0 $worker "$cmd"
 }
 
 # This function traps notification signals and calls all registered callbacks

@@ -143,7 +143,7 @@ test_async_process_results_stress() {
 
 	integer iter=40 timeout=5
 	for i in {1..$iter}; do
-		async_job test "print -n $i"
+		async_job test -s "print -n $i"
 	done
 
 	float start=$EPOCHSECONDS
@@ -174,7 +174,7 @@ test_async_process_results_stress() {
 	# Test with longer running commands (sleep, then print).
 	iter=40
 	for i in {1..$iter}; do
-		async_job test "sleep 1 && print -n $i"
+		async_job test -s "sleep 1 && print -n $i"
 		sleep 0.00001
 		(( iter % 6 == 0 )) && async_process_results test cb
 	done
@@ -210,13 +210,31 @@ test_async_job_multiple_commands_in_multiline_string() {
 
 	async_start_worker test
 	# Test multi-line (single string) command.
-	async_job test 'print "hi\n  123 "'$'\nprint -n bye'
+	async_job test -s 'print "hi\n  123 "'$'\nprint -n bye'
 	while ! async_process_results test cb; do :; done
 	async_stop_worker test
 
 	[[ $result[1] = print ]] || t_error "want command name: print, got" $result[1]
 	local want=$'hi\n  123 \nbye'
 	[[ $result[3] = $want ]] || t_error "want output: ${(Vq-)want}, got ${(Vq-)result[3]}"
+}
+
+test_async_job_command_with_space() {
+	local -a result
+	cb() { result=("$@") }
+
+	async_start_worker test
+	# Test multi-line (single string) command.
+	async_job test '/abra cadabra'
+	while ! async_process_results test cb; do :; done
+	async_stop_worker test
+
+	local want='/abra\ cadabra'
+	[[ $result[1] = $want ]] || t_error "want command name: ${(Vq-)want}, got ${(Vq-)result[1]}"
+
+	# Check that we get a command not found.
+	want='/abra cadabra'
+	[[ $result[5] = *$want ]] || t_error "want stderr to contain: ${(Vq-)want}, got ${(Vq-)result[5]}"
 }
 
 test_async_job_git_status() {
@@ -322,7 +340,7 @@ test_async_worker_notify_sigwinch() {
 	async_start_worker test -n
 	async_register_callback test cb
 
-	async_job test 'sleep 0.1; print hi'
+	async_job test -s 'sleep 0.1; print hi'
 
 	while (( ! $#result )); do sleep 0.01; done
 
@@ -437,9 +455,9 @@ test_async_worker_update_pwd() {
 	async_start_worker test1
 	t_defer async_stop_worker test1
 
-	async_job test1 'print $PWD'
-	async_worker_eval test1 'print -n foo; cd ..; print -n bar; print -n -u2 baz'
-	async_job test1 'print $PWD'
+	async_job test1 -s 'print $PWD'
+	async_worker_eval test1 -s 'print -n foo; cd ..; print -n bar; print -n -u2 baz'
+	async_job test1 -s 'print $PWD'
 
 	start=$EPOCHREALTIME
 	while (( EPOCHREALTIME - start < 2.0 && $#result < 2 )); do
@@ -468,9 +486,9 @@ test_async_worker_update_pwd_and_env() {
 	async_start_worker test1
 	t_defer async_stop_worker test1
 
-	async_job test1 "print -n $myenv"
-	async_worker_eval test1 "cd ..; export myenv=${(q)input}"
-	async_job test1 'print -n $myenv'
+	async_job test1 -s "print -n $myenv"
+	async_worker_eval test1 -s "cd ..; export myenv=${(q)input}"
+	async_job test1 -s 'print -n $myenv'
 
 	start=$EPOCHREALTIME
 	while (( EPOCHREALTIME - start < 2.0 && $#result < 2 )); do
@@ -623,7 +641,7 @@ test_zle_watcher() {
 		t_fatal "want _async_zle_watcher to be registered as zle watcher, got output ${(Vq-)result}"
 	}
 
-	zpty_run async_job test 'print hello world' || t_fatal "could not send async_job command"
+	zpty_run async_job test -s 'print hello world' || t_fatal "could not send async_job command"
 
 	zpty -r -m zsh result "*print 0 'hello world'*" || {
 		t_fatal "want \"print 0 'hello world'\", got output ${(Vq-)result}"

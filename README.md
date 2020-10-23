@@ -56,13 +56,17 @@ Start a new async worker with optional parameters, a worker can be told to only 
 
 Simply stops a worker and all active jobs will be terminated immediately.
 
-#### `async_job <worker_name> <my_function> [<function_params>]`
+#### `async_job <worker_name> [-s] <my_function> [<function_params>]`
 
 Start a new asynchronous job on specified worker, assumes the worker is running.
 
-#### `async_worker_eval <worker_name> <my_function> [<function_params>]`
+* `-s` interpret the following argument as a script
 
-Evaluate a command (like async_job) inside the async worker, then worker environment can be manipulated. For example, issuing a cd command will change the PWD of the worker which will then be inherited by all future async jobs.
+#### `async_worker_eval <worker_name> [-s] <my_function> [<function_params>]`
+
+Evaluate a command inside the async worker (similar to async job) so that the worker environment can be manipulated. For example, issuing a cd command will change the PWD of the worker which will then be inherited by all future async jobs.
+
+* `-s` interpret the following argument as a script
 
 Output will be returned via callback, job name will be [async/eval].
 
@@ -109,25 +113,32 @@ Flush all current jobs running on a worker. This will terminate any and all runn
 source ./async.zsh
 async_init
 
-# Initialize a new worker (with notify option)
+# Function to be run asynchronously, make sure to
+# define it _before_ running async_start_worker.
+print_my_hello() {
+	print hello
+}
+
+# Initialize a new worker (with notify option).
 async_start_worker my_worker -n
 
-# Create a callback function to process results
+# Create a callback function to process results.
 COMPLETED=0
 completed_callback() {
 	COMPLETED=$(( COMPLETED + 1 ))
 	print $@
 }
 
-# Register callback function for the workers completed jobs
+# Register callback function for the workers completed jobs.
 async_register_callback my_worker completed_callback
 
-# Give the worker some tasks to perform
-async_job my_worker print hello
+# Give the worker some tasks to perform.
+async_job my_worker print_my_hello
 async_job my_worker sleep 0.3
+async_job my_worker -s 'print -n this; print -n " is an inline "; print script'
 
-# Wait for the two tasks to be completed
-while (( COMPLETED < 2 )); do
+# Wait for the two tasks to be completed.
+while (( COMPLETED < 3 )); do
 	print "Waiting..."
 	sleep 0.1
 done
@@ -136,11 +147,13 @@ print "Completed $COMPLETED tasks!"
 
 # Output:
 #	Waiting...
-#	print 0 hello 0.001583099365234375
+#	print_my_hello 0 hello 0.0021700859 0
+#	print 0 this is an inline script 0.0021109581 0
 #	Waiting...
 #	Waiting...
-#	sleep 0 0.30631208419799805
-#	Completed 2 tasks!
+#	Waiting...
+#	sleep 0 0.3209681511 0
+#	Completed 3 tasks!
 ```
 
 ## Testing
