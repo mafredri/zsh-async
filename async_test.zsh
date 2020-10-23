@@ -510,7 +510,7 @@ test_all_options() {
 	# Make sure worker is stopped, even if tests fail.
 	t_defer async_stop_worker test
 
-	{ sleep 15 && t_fatal "timed out" } &
+	t_timeout 15
 	local tpid=$!
 
 	opts=(${(k)options})
