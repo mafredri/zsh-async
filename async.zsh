@@ -31,6 +31,14 @@ _async_eval() {
 	} &> >(ASYNC_JOB_NAME=[async/eval] _async_job 0 'command -p cat')
 }
 
+_async_read_stderr_from_stdin_and_print() {
+	local -a stdin
+	IFS=
+	while read -r line; do
+		stdin+=("$line")
+	done && print -r -n - " ${(qpj.\n.)stdin}"$'\0'
+}
+
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
 	# Store start time for job.
@@ -58,7 +66,7 @@ _async_job() {
 			duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 			print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
-		} 2> >(stderr=$(command -p cat) && print -r -n - " "${(q)stderr}$'\0')
+		} 2> >(_async_read_stderr_from_stdin_and_print)
 	)"
 	if [[ $out != $'\0'*$'\0' ]]; then
 		# Corrupted output (aborted job?), skipping.
