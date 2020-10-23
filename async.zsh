@@ -178,7 +178,6 @@ _async_worker() {
 
 	local request do_eval=0
 	local -a cmd
-	local cat_bin=$(which -p cat)
 	while :; do
 		# Wait for jobs sent by async_job.
 		read -r -d $'\0' request || {
@@ -233,7 +232,7 @@ _async_worker() {
 		# recreate it when there are no other jobs running.
 		if (( ! coproc_pid )); then
 			# Use coproc as a mutex for synchronized output between children.
-			coproc "$cat_bin"
+			coproc command cat
 			coproc_pid="$!"
 			# Insert token into coproc
 			print -n -p "t"
