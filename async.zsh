@@ -20,7 +20,7 @@ _async_eval() {
 	# simplicity, this could be improved in the future.
 	{
 		eval "$@"
-	} &> >(ASYNC_JOB_NAME=[async/eval] _async_job 'cat')
+	} &> >(ASYNC_JOB_NAME=[async/eval] _async_job 'command -p cat')
 }
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
@@ -46,7 +46,7 @@ _async_job() {
 			duration=$(( EPOCHREALTIME - duration ))  # Calculate duration.
 
 			print -r -n - $'\0'${(q)jobname} $ret ${(q)stdout} $duration
-		} 2> >(stderr=$(cat) && print -r -n - " "${(q)stderr}$'\0')
+		} 2> >(stderr=$(command -p cat) && print -r -n - " "${(q)stderr}$'\0')
 	)"
 	if [[ $out != $'\0'*$'\0' ]]; then
 		# Corrupted output (aborted job?), skipping.
