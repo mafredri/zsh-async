@@ -512,7 +512,7 @@ setopt_helper() {
 
 	async_start_worker test
 	async_job test print "hello world"
-	while ! async_process_results test cb; do :; done
+	while ! async_process_results test cb; do sleep 0.001; done
 	async_stop_worker test
 
 	# At this point, ksh arrays will only mess with the test.
@@ -531,7 +531,7 @@ test_all_options() {
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
-	t_timeout 15
+	t_timeout 10
 
 	# Make sure worker is stopped, even if tests fail.
 	t_defer async_stop_worker test
@@ -549,9 +549,13 @@ test_all_options() {
 		if [[ $options[$opt] = on ]]; then
 			setopt_helper no$opt
 		else
-			setopt_helper $opt
+			if [[ $opt = xtrace ]] || [[ $opt = printexitvalue ]]; then
+				setopt_helper $opt 2>/dev/null
+			else
+				setopt_helper $opt
+			fi
 		fi
-	done 2>/dev/null  # Remove redirect to see output.
+	done
 }
 
 test_async_job_with_rc_expand_param() {
