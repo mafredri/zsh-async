@@ -312,6 +312,10 @@ test_async_worker_notify_sigwinch() {
 	local -a result
 	cb() { result=("$@") }
 
+	if ! is-at-least 5.0.3 && [[ -n $CI ]]; then
+		t_skip "Skip winch test on GitHub Actions for zsh 5.0.2: undefined signal: WINCH"
+	fi
+
 	ASYNC_USE_ZLE_HANDLER=0
 
 	async_start_worker test -n
