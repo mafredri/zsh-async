@@ -1,5 +1,7 @@
 # zsh-async
 
+![Test](https://github.com/mafredri/zsh-async/workflows/Test/badge.svg)
+
 ```
 Because your terminal should be able to perform tasks asynchronously without external tools!
 ```
