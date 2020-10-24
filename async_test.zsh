@@ -522,7 +522,7 @@ setopt_helper() {
 	# At this point, ksh arrays will only mess with the test.
 	setopt noksharrays
 
-	[[ $result[1] = print ]] || t_fatal "$1 want command name: print, got" $result[1]
+	[[ $result[1] = print ]] || t_fatal "$1 want command name: print, got" $result[1] "(${(Vq-)result})"
 	[[ $result[2] = 0 ]] || t_fatal "$1 want exit code: 0, got" $result[2]
 
 	[[ $result[3] = "hello world" ]] || {
