@@ -229,7 +229,7 @@ _async_worker() {
 	while :; do
 		# Wait for jobs sent by async_job.
 		#read -r -d $'\0' request || {
-		sysread || {
+		sysread reply || {
 			local ret=$?
 			# Unknown error occurred while reading from stdin, the zpty
 			# worker is likely in a broken state, so we shut down.
@@ -244,89 +244,92 @@ _async_worker() {
 			# result, high CPU utilization.
 			return $(( 127 + 1 ))
 		}
-		i=${REPLY[(i)$null]}
-		if ((i > $#REPLY)); then
-			buf+=$REPLY
-			continue
-		fi
-		request="${buf}${REPLY[1,$((i - 1))]}"
-		buf="${REPLY[$((i + 1)), -1]}"
+		while :; do
+			i=${reply[(i)$null]}
+			if ((! i)) || ((i > $#reply)); then
+				buf+=$reply
+				continue 2
+			fi
+			request="${buf}${reply[1,$((i - 1))]}"
+			buf="${reply[$((i + 1)), -1]}"
+			reply=
 
-		# Remove CRLF from the request input, any CRLF that are part of
-		# the request are escaped and won't be removed. Previously we
-		# did not escape everything and had to clean the input because
-		# sometimes when a zpty has died and been respawned, messages
-		# will be prefixed with a carraige return (\r, or \C-M).
-		request=${${request//$'\r'}//$'\n'}
-		if [[ -z $request ]]; then
-			continue
-		fi
+			# Remove CRLF from the request input, any CRLF that are part of
+			# the request are escaped and won't be removed. Previously we
+			# did not escape everything and had to clean the input because
+			# sometimes when a zpty has died and been respawned, messages
+			# will be prefixed with a carraige return (\r, or \C-M).
+			request=${${request//$'\r'}//$'\n'}
+			if [[ -z $request ]]; then
+				continue
+			fi
 
-		# Check for non-job commands sent to worker
-		script=0
-		case $request in
-			_killjobs)          killjobs; continue;;
-			_async_eval\ -s\ *) do_eval=1; script=1;;
-			_async_eval*)       do_eval=1;;
-			-s\ *)              script=1;;
-		esac
-		((do_eval)) && request=${request#_async_eval }
+			# Check for non-job commands sent to worker
+			script=0
+			case $request in
+				_killjobs)          killjobs; continue;;
+				_async_eval\ -s\ *) do_eval=1; script=1;;
+				_async_eval*)       do_eval=1;;
+				-s\ *)              script=1;;
+			esac
+			((do_eval)) && request=${request#_async_eval }
 
-		# Check if request is a script argument.
-		if ((script)); then
-			request=${request#-s }
-			cmd=("${(Qz)request}") # Remove extra layer of quotes.
-			job=$cmd[1]            # Legacy, name of first command...
-		else
-			# Parse the request using shell parsing (z) to allow commands
-			# to be parsed from single strings and multi-args alike.
-			cmd=("${(z)request}")
-			job=$cmd[1]
-		fi
+			# Check if request is a script argument.
+			if ((script)); then
+				request=${request#-s }
+				cmd=("${(Qz)request}") # Remove extra layer of quotes.
+				job=$cmd[1]            # Legacy, name of first command...
+			else
+				# Parse the request using shell parsing (z) to allow commands
+				# to be parsed from single strings and multi-args alike.
+				cmd=("${(z)request}")
+				job=$cmd[1]
+			fi
 
-		# Check if a worker should perform unique jobs, unless
-		# this is an eval since they run synchronously.
-		if (( !do_eval )) && (( unique )); then
-			# Check if a previous job is still running, if yes,
-			# skip this job and let the previous one finish.
-			for pid in ${${(v)jobstates##*:*:}%\=*}; do
-				if [[ ${storage[$job]} == $pid ]]; then
-					continue 2
-				fi
-			done
-		fi
+			# Check if a worker should perform unique jobs, unless
+			# this is an eval since they run synchronously.
+			if (( !do_eval )) && (( unique )); then
+				# Check if a previous job is still running, if yes,
+				# skip this job and let the previous one finish.
+				for pid in ${${(v)jobstates##*:*:}%\=*}; do
+					if [[ ${storage[$job]} == $pid ]]; then
+						continue 2
+					fi
+				done
+			fi
 
-		# Guard against closing coproc from trap before command has started.
-		processing=1
+			# Guard against closing coproc from trap before command has started.
+			processing=1
 
-		# Because we close the coproc after the last job has completed, we must
-		# recreate it when there are no other jobs running.
-		if (( ! coproc_pid )); then
-			# Use coproc as a mutex for synchronized output between children.
-			coproc command -p cat
-			coproc_pid="$!"
-			# Insert token into coproc
-			print -n -p "t"
-		fi
+			# Because we close the coproc after the last job has completed, we must
+			# recreate it when there are no other jobs running.
+			if (( ! coproc_pid )); then
+				# Use coproc as a mutex for synchronized output between children.
+				coproc command -p cat
+				coproc_pid="$!"
+				# Insert token into coproc
+				print -n -p "t"
+			fi
 
-		if (( do_eval )); then
-			_async_eval $cmd
-		else
-			# Run job in background, completed jobs are printed to stdout.
-			_async_job $parent_pid $cmd &
-			# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
-			storage[$job]="$!"
-		fi
+			if (( do_eval )); then
+				_async_eval $cmd
+			else
+				# Run job in background, completed jobs are printed to stdout.
+				_async_job $parent_pid $cmd &
+				# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
+				storage[$job]="$!"
+			fi
 
-		processing=0  # Disable guard.
+			processing=0  # Disable guard.
 
-		if (( do_eval )); then
-			do_eval=0
+			if (( do_eval )); then
+				do_eval=0
 
-			# When there are no active jobs we can't rely on the CHLD trap to
-			# manage the coproc lifetime.
-			close_idle_coproc
-		fi
+				# When there are no active jobs we can't rely on the CHLD trap to
+				# manage the coproc lifetime.
+				close_idle_coproc
+			fi
+		done
 	done
 }
 
