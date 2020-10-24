@@ -227,13 +227,14 @@ _async_worker() {
 	while :; do
 		# Wait for jobs sent by async_job.
 		read -r -d $'\0' request || {
+			local ret=$?
 			# Unknown error occurred while reading from stdin, the zpty
 			# worker is likely in a broken state, so we shut down.
 			terminate_jobs
 
 			# Stdin is broken and in case this was an unintended
 			# crash, we try to report it as a last hurrah.
-			print -r -n $'\0'"'[async]'" $(( 127 + 3 )) "''" 0 "'$0:$LINENO: zpty fd died, exiting'"$'\0'
+			print -r -n $'\0'"'[async]'" $(( 127 + 3 )) "''" 0 "'$0:$LINENO: zpty fd died ($ret), exiting'"$'\0'
 
 			# We use `return` to abort here because using `exit` may
 			# result in an infinite loop that never exits and, as a

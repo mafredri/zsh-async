@@ -515,11 +515,11 @@ setopt_helper() {
 	cb() { result=("$@") }
 
 	async_start_worker ${1}_worker
-	sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
+	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 	async_job ${1}_worker print "hello world"
 	while ! async_process_results ${1}_worker cb; do sleep 0.001; done
+	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 	async_stop_worker ${1}_worker
-	sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 
 	# At this point, ksh arrays will only mess with the test.
 	setopt noksharrays
@@ -539,10 +539,10 @@ test_all_options() {
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
-	t_timeout 10
+	t_timeout 30
 
 	# Make sure worker is stopped, even if tests fail.
-	t_defer async_stop_worker test
+	#t_defer async_stop_worker test
 
 	local -a opts exclude
 	opts=(${(k)options})
@@ -552,17 +552,22 @@ test_all_options() {
 		zle interactive restricted shinstdin stdin onecmd singlecommand
 		warnnestedvar errreturn
 	)
+	#setopt nopromptsubst
 
-	for opt in ${opts:|exclude}; do
-		if [[ $options[$opt] = on ]]; then
-			setopt_helper no$opt
-		else
-			if [[ $opt = xtrace ]] || [[ $opt = printexitvalue ]]; then
-				setopt_helper $opt 2>/dev/null
+	local -a testopts=(${opts:|exclude})
+	for ((i = 1; i <= $#testopts; i++)); do
+		t_log "Testing with ${testopts[i]} included..."
+		for opt in $testopts[1,$i]; do
+			if [[ $options[$opt] = on ]]; then
+				setopt_helper no$opt
 			else
-				setopt_helper $opt
+				if [[ $opt = xtrace ]] || [[ $opt = printexitvalue ]]; then
+					setopt_helper $opt 2>/dev/null
+				else
+					setopt_helper $opt
+				fi
 			fi
-		fi
+		done
 	done
 }
 
