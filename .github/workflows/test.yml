@@ -55,4 +55,4 @@ jobs:
         run: |
           export PATH="/opt/zsh/bin:$PATH"
           zsh --version
-          ./test.zsh -v -x -d
+          ./test.zsh -v -d
