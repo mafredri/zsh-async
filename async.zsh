@@ -513,7 +513,7 @@ _async_send_job() {
 # 	-s interpret the argument as a script
 #
 async_job() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
 
 	local worker=$1; shift
 
@@ -538,7 +538,7 @@ async_job() {
 # 	-s interpret the argument as a script
 #
 async_worker_eval() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
 
 	local worker=$1; shift
 
@@ -610,7 +610,7 @@ async_unregister_callback() {
 # 	async_flush_jobs <worker_name>
 #
 async_flush_jobs() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
 
 	local worker=$1; shift
 
@@ -648,7 +648,7 @@ async_flush_jobs() {
 # 	-p pid to notify (defaults to current pid)
 #
 async_start_worker() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noclobber
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit noclobber
 
 	local worker=$1; shift
 	local -a args
@@ -731,7 +731,7 @@ async_start_worker() {
 # 	async_stop_worker <worker_name_1> [<worker_name_2>]
 #
 async_stop_worker() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
 
 	local ret=0 worker k v
 	for worker in $@; do

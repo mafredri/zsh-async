@@ -520,7 +520,7 @@ setopt_helper() {
 	cb() { result=("$@") }
 
 	async_start_worker setopt_helper
-	async_job setopt_helper print "hello world"
+	async_job setopt_helper print "$1"
 	while ! async_process_results setopt_helper cb; do sleep 0.001; done
 	async_stop_worker setopt_helper
 
@@ -530,8 +530,8 @@ setopt_helper() {
 	[[ $result[1] = print ]] || t_error "$1 want command name: print, got" $result[1] "(${(Vq-)result})"
 	[[ $result[2] = 0 ]] || t_error "$1 want exit code: 0, got" $result[2]
 
-	[[ $result[3] = "hello world" ]] || {
-		t_error "$1 want output: \"hello world\", got" ${(Vq-)result[3]}
+	[[ $result[3] = "$1" ]] || {
+		t_error "$1 want output: \"$1\", got" ${(Vq-)result[3]}
 	}
 }
 
@@ -542,13 +542,13 @@ test_all_options() {
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
-	t_timeout 5
+	t_timeout 10
 
 	# Make sure worker is stopped, even if tests timeout.
 	t_defer async_stop_worker setopt_helper
 
 	local -a opts exclude
-	opts=(${(k)options})
+	opts=(${(ok)options})
 
 	# These options can't be tested.
 	exclude=(
