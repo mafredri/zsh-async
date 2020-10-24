@@ -125,12 +125,12 @@ _async_worker() {
 			# We use SIGWINCH for compatibility with older versions of zsh
 			# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
 			# cause a deadlock in the shell under certain circumstances.
-			kill -SIGWINCH $parent_pid
+			kill -WINCH $parent_pid
 		fi
 	}
 
 	# Register a SIGCHLD trap to handle the completion of child processes.
-	trap child_exit SIGCHLD
+	trap child_exit CHLD
 
 	# Process option parameters passed to worker.
 	while getopts "np:uz" opt; do
@@ -145,17 +145,17 @@ _async_worker() {
 	# Terminate all running jobs, note that this function does not
 	# reinstall the child trap.
 	terminate_jobs() {
-		trap - SIGCHLD   # Ignore child exits during kill.
+		trap - CHLD   # Ignore child exits during kill.
 		coproc :      # Quit coproc.
 		coproc_pid=0  # Reset pid.
 
 		if is-at-least 5.4.1; then
-			trap '' SIGHUP    # Catch the HUP sent to this process.
-			kill -SIGHUP -$$  # Send to entire process group.
-			trap - SIGHUP     # Disable HUP trap.
+			trap '' HUP    # Catch the HUP sent to this process.
+			kill -HUP -$$  # Send to entire process group.
+			trap - HUP     # Disable HUP trap.
 		else
 			# We already handle HUP for Zsh < 5.4.1.
-			kill -SIGHUP -$$  # Send to entire process group.
+			kill -HUP -$$  # Send to entire process group.
 		fi
 	}
 
@@ -173,7 +173,7 @@ _async_worker() {
 		(( coproc_pid )) && read -r -k 1 -p tok
 
 		terminate_jobs
-		trap child_exit SIGCHLD  # Reinstall child trap.
+		trap child_exit CHLD  # Reinstall child trap.
 	}
 
 	local request do_eval=0
@@ -461,7 +461,7 @@ async_register_callback() {
 	# Enable trap when the ZLE watcher is unavailable, allows
 	# workers to notify (via -n) when a job is done.
 	if [[ ! -o interactive ]] || [[ ! -o zle ]]; then
-		trap '_async_notify_trap' SIGWINCH
+		trap '_async_notify_trap' WINCH
 	elif [[ -o interactive ]] && [[ -o zle ]]; then
 		local fd w
 		for fd w in ${(@kv)ASYNC_PTYS}; do
