@@ -512,8 +512,7 @@ test_all_options() {
 	# Make sure worker is stopped, even if tests fail.
 	t_defer async_stop_worker test
 
-	local tpid=$!
-
+	local -a opts exclude
 	opts=(${(k)options})
 
 	# These options can't be tested.
@@ -529,8 +528,6 @@ test_all_options() {
 			setopt_helper $opt
 		fi
 	done 2>/dev/null  # Remove redirect to see output.
-
-	kill $tpid  # Stop timeout.
 }
 
 test_async_job_with_rc_expand_param() {
