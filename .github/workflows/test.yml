@@ -38,7 +38,7 @@ jobs:
       - name: Build zsh
         if: steps.cache-zsh.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install build-essential autoconf libncurses-dev
+          sudo apt-get install build-essential autoconf yodl libncurses-dev
           cd "$GITHUB_WORKSPACE/zsh-build"
           aclocal
           autoconf
