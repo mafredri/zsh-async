@@ -240,13 +240,13 @@ run_test_module() {
 }
 
 cleanup() {
-	trap '' HUP
-	kill -HUP -$$ 2>/dev/null
-	trap - HUP
-	kill -HUP $$ 2>/dev/null
+	trap '' SIGHUP
+	kill -SIGHUP -$$ 2>/dev/null
+	trap - SIGHUP
+	kill -SIGHUP $$ 2>/dev/null
 }
 
-trap cleanup EXIT INT HUP QUIT TERM USR1
+trap cleanup EXIT SIGINT SIGHUP QUIT TERM USR1
 
 # Parse command arguments.
 parse_opts $@
@@ -262,6 +262,6 @@ for tf in ${~TEST_GLOB}/*_test.(zsh|sh); do
 done
 
 trap - EXIT
-trap '' HUP
-kill -HUP -$$ 2>/dev/null
+trap '' SIGHUP
+kill -SIGHUP -$$ 2>/dev/null
 exit $failed
