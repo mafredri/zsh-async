@@ -55,4 +55,4 @@ jobs:
         run: |
           export PATH="/opt/zsh/bin:$PATH"
           zsh --version
-          zsh -f ./test.zsh -v
+          script -qec 'zsh -if ./test.zsh -v' /dev/null
