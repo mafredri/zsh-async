@@ -44,6 +44,8 @@ _async_job() {
 	# Store start time for job.
 	float -F duration=$EPOCHREALTIME
 
+	zmodload zsh/system
+
 	# Parent pid for notifications via kill signal.
 	local parent_pid=$1; shift
 
@@ -74,20 +76,33 @@ _async_job() {
 	fi
 
 	# Grab mutex lock, stalls until token is available.
-	read -r -k 1 -p tok || return 1
+	sysread -s 1 -i 4 tok || return 1
+	#read -r -k 1 -p tok || return 1
 
 	# Chunk up the output so as to not fill up the entire fd.
-	for ((i = 1; i < $#out; i += ASYNC_MAX_BUFFER_SIZE)); do
+	integer i c
+	for ((i = 1; i < $#out; i=i)); do
+	# # for ((i = 1; i < $#out; i += ASYNC_MAX_BUFFER_SIZE)); do
 		# Note: We are surrounding the message in newlines here in an
 		# attempt to force zpty to behave. Literal newlines will be
 		# filtered by async_process_results. Any newlines in the job
 		# output will survive, as they are quoted.
 		#
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-		if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
-			# BUG(mafredri): The worker and parent process should be informed.
-			break
+		syswrite -c c $'\n'${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}$'\n'
+		ret=$?
+		print -u2 $ret
+		if ((c == ASYNC_MAX_BUFFER_SIZE)); then
+			((c -= 2))
+		elif ((c)); then
+			((c--))
 		fi
+		((i += c))
+		print -u2 $i
+		# if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
+		# 	# BUG(mafredri): The worker and parent process should be informed.
+		# 	break
+		# fi
 
 		# When notifications are enabled, inform the parent that the
 		# buffer is filling up and must be consumed.
@@ -105,7 +120,9 @@ _async_job() {
 	done
 
 	# Unlock mutex by inserting a token.
-	print -n -p $tok
+	# print -n -p $tok
+	syswrite -o 3 $tok
+	print -u2 $?
 }
 
 # The background worker manages all tasks and runs them without interfering with other processes
@@ -224,12 +241,12 @@ _async_worker() {
 		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
-	local i buf reply null=$'\0' request job do_eval=0 script=0
+	local i c buf reply null=$'\0' request reqstart job do_eval=0 script=0
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
 		#read -r -d $'\0' request || {
-		sysread reply || {
+		sysread -c c reply || {
 			local ret=$?
 			# Unknown error occurred while reading from stdin, the zpty
 			# worker is likely in a broken state, so we shut down.
@@ -244,22 +261,30 @@ _async_worker() {
 			# result, high CPU utilization.
 			return $(( 127 + 1 ))
 		}
+		print -u2 $c
 		while :; do
-			i=${reply[(i)$null]}
-			if ((! i)) || ((i > $#reply)); then
+			i=${reply[(i)$null$null]}
+			if ((! i)) || ((i >= $#reply)); then
 				buf+=$reply
+				reply=
 				continue 2
 			fi
 			request="${buf}${reply[1,$((i - 1))]}"
-			buf="${reply[$((i + 1)), -1]}"
-			reply=
+			buf=
+			reply="${reply[$((i + 2)), -1]}"
+
+			reqstart=${request[(I)$null]}
+			if ((!reqstart)); then
+				continue
+			fi
+			request="${request[$((reqstart + 1)),-1]}"
 
 			# Remove CRLF from the request input, any CRLF that are part of
 			# the request are escaped and won't be removed. Previously we
 			# did not escape everything and had to clean the input because
 			# sometimes when a zpty has died and been respawned, messages
 			# will be prefixed with a carraige return (\r, or \C-M).
-			request=${${request//$'\r'}//$'\n'}
+			#request=${${request//$'\r'}//$'\n'}
 			if [[ -z $request ]]; then
 				continue
 			fi
@@ -315,7 +340,7 @@ _async_worker() {
 				_async_eval $cmd
 			else
 				# Run job in background, completed jobs are printed to stdout.
-				_async_job $parent_pid $cmd &
+				_async_job $parent_pid $cmd 3>&p 4<&p &
 				# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
 				storage[$job]="$!"
 			fi
@@ -462,7 +487,20 @@ _async_send_job() {
 
 	# The command is surrounded in newlines to enourage better
 	# behavior from the zpty worker, these are later stripped.
-	zpty -w $worker $'\n'"$@"$'\0\n'
+	# zpty -w $worker $'\n'"$@"$'\0\n'
+	typeset -gA ASYNC_PTYS
+
+	local index=${${(v)ASYNC_PTYS}[(i)$worker]}
+	syswrite -o ${${(k)ASYNC_PTYS}[$index]} - $'\n\0'"$*"
+	ret=$?
+	if ((!ret)); then
+		syswrite -o ${${(k)ASYNC_PTYS}[$index]} - $'\0\0\n'
+		ret=$?
+	else
+		typeset -p ERRNO
+		print -u 2 "_async_send_job: write error: $ret ${ERRNO}"
+	fi
+	return $ret
 }
 
 #
@@ -625,14 +663,6 @@ async_start_worker() {
 		# Inform the worker to ignore the notify flag and that we're
 		# using a ZLE watcher instead.
 		args+=(-z)
-
-		if (( ! ASYNC_ZPTY_RETURNS_FD )); then
-			# When zpty doesn't return a file descriptor (on older versions of zsh)
-			# we try to guess it anyway.
-			integer -l zptyfd
-			exec {zptyfd}>&1  # Open a new file descriptor (above 10).
-			exec {zptyfd}>&-  # Close it so it's free to be used by zpty.
-		fi
 	fi
 
 	# Workaround for stderr in the main shell sometimes (incorrectly) being
@@ -653,12 +683,26 @@ async_start_worker() {
 		unsetopt xtrace
 	}
 
+	if (( ! ASYNC_ZPTY_RETURNS_FD )); then
+		# When zpty doesn't return a file descriptor (on older versions of zsh)
+		# we try to guess it anyway.
+		integer -l zptyfd
+		exec {zptyfd}>&1  # Open a new file descriptor (above 10).
+		exec {zptyfd}>&-  # Close it so it's free to be used by zpty.
+	fi
+
+	typeset -h REPLY
 	if (( errfd != -1 )); then
 		zpty -b $worker _async_worker $worker -p $$ $args 2>&$errfd
 	else
 		zpty -b $worker _async_worker $worker -p $$ $args
 	fi
 	local ret=$?
+	if (( ! ASYNC_ZPTY_RETURNS_FD )); then
+		REPLY=$zptyfd  # Use the guessed value for the file desciptor.
+	fi
+
+	ASYNC_PTYS[$REPLY]=$worker  # Map the file desciptor to the worker.
 
 	# Re-enable it if it was enabled, for debugging.
 	(( has_xtrace )) && setopt xtrace
@@ -676,13 +720,8 @@ async_start_worker() {
 		sleep 0.001
 	fi
 
-	if [[ -o interactive ]] && [[ -o zle ]]; then
-		if (( ! ASYNC_ZPTY_RETURNS_FD )); then
-			REPLY=$zptyfd  # Use the guessed value for the file desciptor.
-		fi
-
-		ASYNC_PTYS[$REPLY]=$worker  # Map the file desciptor to the worker.
-	fi
+	#if [[ -o interactive ]] && [[ -o zle ]]; then
+	#fi
 }
 
 #
@@ -699,7 +738,7 @@ async_stop_worker() {
 		# Find and unregister the zle handler for the worker
 		for k v in ${(@kv)ASYNC_PTYS}; do
 			if [[ $v == $worker ]]; then
-				zle -F $k
+				zle -F $k 2>/dev/null
 				unset "ASYNC_PTYS[$k]"
 			fi
 		done
@@ -724,8 +763,7 @@ async_init() {
 	(( ASYNC_INIT_DONE )) && return
 	typeset -g ASYNC_INIT_DONE=1
 
-	zmodload zsh/zpty
-	zmodload zsh/datetime
+	zmodload zsh/{datetime,system,zpty}
 
 	# Load is-at-least for reliable version check.
 	autoload -Uz is-at-least
@@ -733,12 +771,12 @@ async_init() {
 	# Check if zsh/zpty returns a file descriptor or not,
 	# shell must also be interactive with zle enabled.
 	typeset -g ASYNC_ZPTY_RETURNS_FD=0
-	[[ -o interactive ]] && [[ -o zle ]] && {
+	#[[ -o interactive ]] && [[ -o zle ]] && {
 		typeset -h REPLY
 		zpty _async_test :
 		(( REPLY )) && ASYNC_ZPTY_RETURNS_FD=1
 		zpty -d _async_test
-	}
+	#}
 }
 
 async() {

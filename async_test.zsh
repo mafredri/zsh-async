@@ -141,9 +141,13 @@ test_async_process_results_stress() {
 	async_start_worker test
 	t_defer async_stop_worker test
 
-	integer iter=20 timeout=5
+	integer iter=200 timeout=15
 	for i in {1..$iter}; do
-		async_job test -s "print -n $i"
+		async_job test -s "print -n $i" || {
+			sleep 0.1
+			print retying $i...
+			async_job test -s "print -n $i"
+		}
 	done
 
 	float start=$EPOCHSECONDS
@@ -154,6 +158,7 @@ test_async_process_results_stress() {
 			t_log "timed out after ${timeout}s"
 			t_fatal "wanted $iter results, got $(( $#r / 6 ))"
 		}
+		sleep 0.1
 	done
 
 	local -a stdouts
@@ -172,7 +177,7 @@ test_async_process_results_stress() {
 	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}"
 
 	# Test with longer running commands (sleep, then print).
-	iter=20
+	iter=200
 	for i in {1..$iter}; do
 		async_job test -s "sleep 1 && print -n $i"
 		sleep 0.00001
