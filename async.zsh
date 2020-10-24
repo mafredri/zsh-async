@@ -117,6 +117,10 @@ _async_worker() {
 	# pids of child processes.
 	unsetopt monitor
 
+	# Worker name, for debugging purposes.
+	local worker_name=$1
+	shift
+
 	# Redirect stderr to `/dev/null` in case unforseen errors produced by the
 	# worker. For example: `fork failed: resource temporarily unavailable`.
 	# Some older versions of zsh might also print malloc errors (know to happen
@@ -124,6 +128,7 @@ _async_worker() {
 	if ((ASYNC_DEBUG)); then
 		exec 2>>${ASYNC_DEBUG_WORKER_STDERR}
 		if [[ $ASYNC_DEBUG_WORKER_STDERR != /dev/null ]]; then
+			PROMPT4="(async):${worker_name}> ${PROMPT4}"
 			setopt xtrace
 		fi
 	else
@@ -635,9 +640,9 @@ async_start_worker() {
 	}
 
 	if (( errfd != -1 )); then
-		zpty -b $worker _async_worker -p $$ $args 2>&$errfd
+		zpty -b $worker _async_worker $worker -p $$ $args 2>&$errfd
 	else
-		zpty -b $worker _async_worker -p $$ $args
+		zpty -b $worker _async_worker $worker -p $$ $args
 	fi
 	local ret=$?
 

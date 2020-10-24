@@ -15,13 +15,13 @@ zmodload zsh/zselect
 TEST_GLOB=.
 TEST_RUN=
 TEST_VERBOSE=0
-TEST_TRACE=1
+TEST_TRACE=0
 TEST_CODE_SKIP=100
 TEST_CODE_ERROR=101
 TEST_CODE_TIMEOUT=102
 
 show_help() {
-	print "usage: ./test.zsh [-v] [-x] [-run pattern] [search pattern]"
+	print "usage: ./test.zsh [-h] [-v] [-x] [-d] [-run pattern] [search pattern]"
 }
 
 parse_opts() {

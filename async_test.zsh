@@ -651,6 +651,14 @@ test_zle_watcher() {
 test_main() {
 	# Load zsh-async before running each test.
 	zmodload zsh/datetime
+	if [[ -o xtrace ]]; then
+		typeset -g ASYNC_DEBUG ASYNC_DEBUG_WORKER_STDERR
+		export ASYNC_DEBUG=1
+		# Output to special fd from test runner.
+		# TODO(mafredri):
+		exec 9> >(cat)
+		export ASYNC_DEBUG_WORKER_STDERR=/dev/fd/9
+	fi
 	. ./async.zsh
 	async_init
 }
