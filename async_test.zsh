@@ -385,29 +385,29 @@ test_async_flush_jobs() {
 		{ sleep 0.3 && print -n 3 } &!
 	}
 
-	async_start_worker test
-	t_defer async_stop_worker test
+	async_start_worker flushtest
+	t_defer async_stop_worker flushtest
 
 	# Start a job that prints 1 and starts two disowned child processes that
 	# print 2 and 3, respectively, after a timeout. The job will not exit
 	# immediately (and thus print 1) because the child processes are still
 	# running.
-	async_job test print_123_delayed_exit
+	async_job flushtest print_123_delayed_exit
 
 	# Check that the job is waiting for the child processes.
 	sleep 0.05
-	async_process_results test cb
+	async_process_results flushtest cb
 	(( $#r == 0 )) || t_error "want no output, got ${(Vq-)r}"
 
 	# Start a job that prints four, it will produce
 	# output but we will not process it.
-	async_job test print_four
+	async_job flushtest print_four
 	sleep 0.2
 
 	# Flush jobs, this kills running jobs and discards unprocessed results.
 	# TODO: Confirm that they no longer exist in the process tree.
 	local output line
-	ASYNC_DEBUG=1 async_flush_jobs test | while read -r line; do output+="$line"; done
+	ASYNC_DEBUG=1 async_flush_jobs flushtest | while read -r line; do output+="$line"; done
 	output="${(Q)output}"
 
 	# NOTE(mafredri): First 'p' in print_four is lost when null-prefixing
@@ -418,7 +418,7 @@ test_async_flush_jobs() {
 
 	# Check that the killed job did not produce output.
 	sleep 0.1
-	async_process_results test cb
+	async_process_results flushtest cb
 	(( $#r == 0 )) || t_error "want no output, got ${(Vq-)r}"
 }
 
