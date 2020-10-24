@@ -280,9 +280,11 @@ test_async_job_unique_worker() {
 	helper() {
 		sleep 0.1; print $1
 	}
+	t_timeout 2
 
 	# Start a unique (job) worker.
 	async_start_worker test -u
+	t_defer async_stop_worker test
 
 	# Launch two jobs with the same name, the first one should be
 	# allowed to complete whereas the second one is never run.
@@ -297,8 +299,6 @@ test_async_job_unique_worker() {
 	# other didn't run.
 	sleep 0.1
 	async_process_results test cb
-
-	async_stop_worker test
 
 	# Ensure that cb was only called once with correc output.
 	[[ ${#result} = 6 ]] || t_error "result: want 6 elements, got" ${#result}
@@ -527,16 +527,17 @@ setopt_helper() {
 }
 
 test_all_options() {
-	local -a opts exclude
-
 	if ! is-at-least 5.1; then
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
+	t_timeout 15
+
+	local -a opts exclude
+
 	# Make sure worker is stopped, even if tests fail.
 	t_defer async_stop_worker test
 
-	t_timeout 15
 	local tpid=$!
 
 	opts=(${(k)options})
