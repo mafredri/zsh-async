@@ -542,7 +542,7 @@ test_all_options() {
 	# These options can't be tested.
 	exclude=(
 		zle interactive restricted shinstdin stdin onecmd singlecommand
-		warnnestedvar errreturn
+		warnnestedvar errreturn monitor
 	)
 
 	for opt in ${opts:|exclude}; do
