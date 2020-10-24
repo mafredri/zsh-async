@@ -492,10 +492,10 @@ setopt_helper() {
 	cb() { result=("$@") }
 
 	async_start_worker ${1}_worker
+	t_defer async_stop_worker ${1}_worker
 	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 	async_job ${1}_worker print "hello world"
 	while ! async_process_results ${1}_worker cb; do sleep 0.001; done
-	async_stop_worker ${1}_worker
 	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 
 	# At this point, ksh arrays will only mess with the test.
@@ -527,8 +527,7 @@ test_all_options() {
 	# These options can't be tested.
 	exclude=(
 		zle interactive restricted shinstdin stdin onecmd singlecommand
-		warnnestedvar errreturn printexitvalue posixargzero autolist
-		kshzerosubscript localloops listpacked
+		warnnestedvar errreturn
 	)
 
 	local -a testopts=(${opts:|exclude})
