@@ -113,6 +113,8 @@ _async_worker() {
 	# Reset all options to defaults inside async worker.
 	emulate -R zsh
 
+	zmodload zsh/system  # For sysread.
+
 	# Make sure monitor is unset to avoid printing the
 	# pids of child processes.
 	unsetopt monitor
@@ -222,11 +224,12 @@ _async_worker() {
 		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
-	local request job do_eval=0 script=0
+	local i buf reply null=$'\0' request job do_eval=0 script=0
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
-		read -r -d $'\0' request || {
+		#read -r -d $'\0' request || {
+		sysread || {
 			local ret=$?
 			# Unknown error occurred while reading from stdin, the zpty
 			# worker is likely in a broken state, so we shut down.
@@ -241,6 +244,13 @@ _async_worker() {
 			# result, high CPU utilization.
 			return $(( 127 + 1 ))
 		}
+		i=${REPLY[(i)$null]}
+		if ((i > $#REPLY)); then
+			buf+=$REPLY
+			continue
+		fi
+		request="${buf}${REPLY[1,$((i - 1))]}"
+		buf="${REPLY[$((i + 1)), -1]}"
 
 		# Remove CRLF from the request input, any CRLF that are part of
 		# the request are escaped and won't be removed. Previously we
