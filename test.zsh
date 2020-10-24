@@ -12,6 +12,7 @@ zmodload zsh/zutil
 zmodload zsh/system
 zmodload zsh/zselect
 
+export ZTEST_DEBUG=0
 export TEST_GLOB=.
 export TEST_RUN=
 export TEST_VERBOSE=0
@@ -61,10 +62,11 @@ t_runner_init() {
 	_t_runner() {
 		local -a _test_defer_funcs
 		local _test_timeout_trace _test_timeout=0
-		integer _test_errors=0
+		integer _test_errors=0 _test_timeout_pid=0
 
 		TRAPALRM() {
 			if ((_test_timeout)); then
+				_test_timeout_pid=0
 				_t_log $_test_timeout_trace "timed out after ${_test_timeout}s"
 				() { return $TEST_CODE_TIMEOUT }
 				t_done
@@ -115,6 +117,7 @@ t_runner_init() {
 		_test_timeout_trace=$funcfiletrace[1]
 		_test_timeout=$1
 		{ sleep $_test_timeout && kill -ALRM $$ } &
+		_test_timeout_pid=$!
 	}
 
 	# t_defer takes a function (and optionally, arguments)
@@ -128,6 +131,7 @@ t_runner_init() {
 	t_done() {
 		local ret=$? w=${1:-1}
 		(( ret < 100 && _test_errors )) && ret=101
+		(( _test_timeout_pid )) && kill $_test_timeout_pid
 
 		(( w )) && wait    # Wait for test children to exit.
 		for d in $_test_defer_funcs; do
