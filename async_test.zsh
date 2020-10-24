@@ -136,7 +136,7 @@ test_async_process_results_stress() {
 	async_start_worker test
 	t_defer async_stop_worker test
 
-	integer iter=40 timeout=5
+	integer iter=20 timeout=5
 	for i in {1..$iter}; do
 		async_job test "print -n $i"
 	done
@@ -167,7 +167,7 @@ test_async_process_results_stress() {
 	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}"
 
 	# Test with longer running commands (sleep, then print).
-	iter=40
+	iter=20
 	for i in {1..$iter}; do
 		async_job test "sleep 1 && print -n $i"
 		sleep 0.00001
