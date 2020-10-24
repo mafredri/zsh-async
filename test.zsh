@@ -12,13 +12,13 @@ zmodload zsh/zutil
 zmodload zsh/system
 zmodload zsh/zselect
 
-TEST_GLOB=.
-TEST_RUN=
-TEST_VERBOSE=0
-TEST_TRACE=0
-TEST_CODE_SKIP=100
-TEST_CODE_ERROR=101
-TEST_CODE_TIMEOUT=102
+export TEST_GLOB=.
+export TEST_RUN=
+export TEST_VERBOSE=0
+export TEST_TRACE=0
+export TEST_CODE_SKIP=100
+export TEST_CODE_ERROR=101
+export TEST_CODE_TIMEOUT=102
 
 show_help() {
 	print "usage: ./test.zsh [-h] [-v] [-x] [-d] [-run pattern] [search pattern]"
@@ -62,6 +62,7 @@ t_runner_init() {
 		local -a _test_defer_funcs
 		local _test_timeout_trace _test_timeout=0
 		integer _test_errors=0
+
 		TRAPALRM() {
 			if ((_test_timeout)); then
 				_t_log $_test_timeout_trace "timed out after ${_test_timeout}s"
@@ -126,7 +127,7 @@ t_runner_init() {
 	# Can also be called manually when the test is done.
 	t_done() {
 		local ret=$? w=${1:-1}
-		(( _test_errors )) && ret=101
+		(( ret < 100 && _test_errors )) && ret=101
 
 		(( w )) && wait    # Wait for test children to exit.
 		for d in $_test_defer_funcs; do
@@ -220,7 +221,7 @@ run_test_module() {
 		case $test_exit in
 			(0|1) state=PASS;;
 			($TEST_CODE_SKIP) state=SKIP;;
-			($TEST_CODE_ERROR|$TEST_CODE_SKIP) state=FAIL; mod_exit=1;;
+			($TEST_CODE_ERROR|$TEST_CODE_TIMEOUT) state=FAIL; mod_exit=1;;
 			*) state="????";;
 		esac
 
