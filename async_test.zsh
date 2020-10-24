@@ -527,7 +527,8 @@ test_all_options() {
 	# These options can't be tested.
 	exclude=(
 		zle interactive restricted shinstdin stdin onecmd singlecommand
-		warnnestedvar errreturn printexitvalue posixargzero autolist kshzerosubscript
+		warnnestedvar errreturn printexitvalue posixargzero autolist
+		kshzerosubscript localloops listpacked
 	)
 
 	local -a testopts=(${opts:|exclude})
