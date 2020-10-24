@@ -128,8 +128,8 @@ _async_worker() {
 	if ((ASYNC_DEBUG)); then
 		exec 2>>${ASYNC_DEBUG_WORKER_STDERR}
 		if [[ $ASYNC_DEBUG_WORKER_STDERR != /dev/null ]]; then
-			setopt xtrace
 			PROMPT4="(async):${worker_name}> ${PROMPT4}"
+			setopt xtrace
 		fi
 	else
 		exec 2>/dev/null
