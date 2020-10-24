@@ -491,11 +491,11 @@ setopt_helper() {
 	local -a result
 	cb() { result=("$@") }
 
-	async_start_worker test
+	async_start_worker ${1}_worker
 	sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
-	async_job test print "hello world"
-	while ! async_process_results test cb; do sleep 0.001; done
-	async_stop_worker test
+	async_job ${1}_worker print "hello world"
+	while ! async_process_results ${1}_worker cb; do sleep 0.001; done
+	async_stop_worker ${1}_worker
 	sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 
 	# At this point, ksh arrays will only mess with the test.
