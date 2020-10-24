@@ -1,0 +1,59 @@
+name: Test
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        zsh-version:
+          - "5.8"
+          - "5.7.1"
+          - "5.7"
+          - "5.6.2"
+          - "5.5.1"
+          - "5.4.2"
+          - "5.3.1"
+          - "5.3"
+          - "5.2"
+          - "5.1.1"
+          - "5.0.8"
+          # Can't make 5.0.2 work on GitHub Actions, missing signals.
+          # - "5.0.2"
+    runs-on: ${{matrix.os}}
+    steps:
+      - name: Cache zsh
+        id: cache-zsh
+        uses: actions/cache@v2
+        with:
+          path: /opt/zsh
+          key: ${{runner.os}}-${{matrix.zsh-version}}
+
+      - name: Checkout zsh
+        if: steps.cache-zsh.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          repository: zsh-users/zsh
+          ref: zsh-${{matrix.zsh-version}}
+          path: zsh-build
+
+      - name: Build zsh
+        if: steps.cache-zsh.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install build-essential autoconf yodl libncurses-dev
+          cd "$GITHUB_WORKSPACE/zsh-build"
+          aclocal
+          autoconf
+          autoheader
+          ./configure --prefix=/opt/zsh --without-tcsetpgrp
+          make
+          sudo make install.bin install.modules install.fns
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run tests
+        timeout-minutes: 1
+        run: |
+          export PATH="/opt/zsh/bin:$PATH"
+          zsh --version
+          script -qec 'zsh -if ./test.zsh -v' /dev/null
