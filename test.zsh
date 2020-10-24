@@ -88,6 +88,7 @@ t_runner_init() {
 
 	# t_log is for printing log output, visible in verbose (-v) mode.
 	t_log() {
+		setopt localoptions noposixidentifiers
 		local line=$funcfiletrace[1]
 		[[ ${line%:[0-9]*} = "" ]] && line=ztest:$functrace[1]  # Not from a file.
 		_t_log $line "$*"
@@ -95,6 +96,7 @@ t_runner_init() {
 
 	# t_skip is for skipping a test.
 	t_skip() {
+		setopt localoptions noposixidentifiers
 		_t_log $funcfiletrace[1] "$*"
 		() { return $TEST_CODE_SKIP }
 		t_done
@@ -102,18 +104,21 @@ t_runner_init() {
 
 	# t_error logs the error and fails the test without aborting.
 	t_error() {
+		setopt localoptions noposixidentifiers
 		(( _test_errors++ ))
 		_t_log $funcfiletrace[1] "$*"
 	}
 
 	# t_fatal fails the test and halts execution immediately.
 	t_fatal() {
+		setopt localoptions noposixidentifiers
 		_t_log $funcfiletrace[1] "$*"
 		() { return $TEST_CODE_ERROR }
 		t_done
 	}
 
 	t_timeout() {
+		setopt localoptions noposixidentifiers
 		_test_timeout_trace=$funcfiletrace[1]
 		_test_timeout=$1
 		{ sleep $_test_timeout && kill -ALRM $$ } &
