@@ -341,7 +341,7 @@ async_process_results() {
 
 # Watch worker for output
 _async_zle_watcher() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 	local worker=$ASYNC_PTYS[$1]
 	local callback=$ASYNC_CALLBACKS[$worker]
@@ -368,7 +368,7 @@ _async_zle_watcher() {
 }
 
 _async_send_job() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions noshwordsplit
 
 	local caller=$1
 	local worker=$2
@@ -435,7 +435,7 @@ async_worker_eval() {
 
 # This function traps notification signals and calls all registered callbacks
 _async_notify_trap() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local k
 	for k in ${(k)ASYNC_CALLBACKS}; do
@@ -451,7 +451,7 @@ _async_notify_trap() {
 # 	async_register_callback <worker_name> <callback_function>
 #
 async_register_callback() {
-	setopt localoptions noshwordsplit nolocaltraps
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings nolocaltraps
 
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 	local worker=$1; shift
@@ -493,7 +493,7 @@ async_unregister_callback() {
 # 	async_flush_jobs <worker_name>
 #
 async_flush_jobs() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local worker=$1; shift
 
@@ -531,7 +531,7 @@ async_flush_jobs() {
 # 	-p pid to notify (defaults to current pid)
 #
 async_start_worker() {
-	setopt localoptions noshwordsplit noclobber
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noclobber
 
 	local worker=$1; shift
 	local -a args
@@ -613,7 +613,7 @@ async_start_worker() {
 # 	async_stop_worker <worker_name_1> [<worker_name_2>]
 #
 async_stop_worker() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local ret=0 worker k v
 	for worker in $@; do
