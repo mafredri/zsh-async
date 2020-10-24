@@ -291,7 +291,7 @@ test_async_job_unique_worker() {
 	async_job test helper one
 	async_job test helper two
 
-	while ! async_process_results test cb; do :; done
+	while ! async_process_results test cb; do sleep 0.05; done
 
 	# If both jobs were running but only one was complete,
 	# async_process_results() could've returned true for
@@ -386,6 +386,7 @@ test_async_flush_jobs() {
 	}
 
 	async_start_worker test
+	t_defer async_stop_worker test
 
 	# Start a job that prints 1 and starts two disowned child processes that
 	# print 2 and 3, respectively, after a timeout. The job will not exit
@@ -405,8 +406,10 @@ test_async_flush_jobs() {
 
 	# Flush jobs, this kills running jobs and discards unprocessed results.
 	# TODO: Confirm that they no longer exist in the process tree.
-	local output
-	output="${(Q)$(ASYNC_DEBUG=1 async_flush_jobs test)}"
+	local output line
+	ASYNC_DEBUG=1 async_flush_jobs test | while read -r line; do output+="$line"; done
+	output="${(Q)output}"
+
 	# NOTE(mafredri): First 'p' in print_four is lost when null-prefixing
 	# _async_job output.
 	[[ $output = *'rint_four 0 4'* ]] || {
@@ -417,8 +420,6 @@ test_async_flush_jobs() {
 	sleep 0.1
 	async_process_results test cb
 	(( $#r == 0 )) || t_error "want no output, got ${(Vq-)r}"
-
-	async_stop_worker test
 }
 
 test_async_worker_survives_termination_of_other_worker() {
