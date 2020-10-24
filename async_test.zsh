@@ -492,11 +492,11 @@ setopt_helper() {
 	cb() { result=("$@") }
 
 	async_start_worker ${1}_worker
-	t_defer async_stop_worker ${1}_worker
 	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 	async_job ${1}_worker print "hello world"
 	while ! async_process_results ${1}_worker cb; do sleep 0.001; done
 	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
+	async_stop_worker ${1}_worker
 
 	# At this point, ksh arrays will only mess with the test.
 	setopt noksharrays
@@ -519,7 +519,7 @@ test_all_options() {
 	t_timeout 30
 
 	# Make sure worker is stopped, even if tests fail.
-	t_defer async_stop_worker test
+	#t_defer async_stop_worker test
 
 	local -a opts exclude
 	opts=(${(k)options})
@@ -529,6 +529,7 @@ test_all_options() {
 		zle interactive restricted shinstdin stdin onecmd singlecommand
 		warnnestedvar errreturn
 	)
+	#setopt nopromptsubst
 
 	local -a testopts=(${opts:|exclude})
 	for ((i = 1; i <= $#testopts; i++)); do
