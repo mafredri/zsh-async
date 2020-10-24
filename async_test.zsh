@@ -492,9 +492,11 @@ setopt_helper() {
 	cb() { result=("$@") }
 
 	async_start_worker test
+	sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 	async_job test print "hello world"
 	while ! async_process_results test cb; do sleep 0.001; done
 	async_stop_worker test
+	sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
 
 	# At this point, ksh arrays will only mess with the test.
 	setopt noksharrays
