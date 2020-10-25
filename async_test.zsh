@@ -8,7 +8,7 @@ test__async_job_print_hi() {
 
 	local line
 	local -a out
-	line=$(_async_job 0 print hi)
+	line=$(_async_job 0 print hi) 3>&p 4<&p
 	# Remove leading/trailing null, parse, unquote and interpret as array.
 	line=${${line//$'\r'}//$'\n'}
 	line=$line[2,$#line-1]
@@ -27,7 +27,7 @@ test__async_job_stderr() {
 
 	local line
 	local -a out
-	line=$(_async_job 0 print 'hi 1>&2')
+	line=$(_async_job 0 print 'hi 1>&2') 3>&p 4<&p
 	# Remove trailing null, parse, unquote and interpret as array.
 	line=${${line//$'\r'}//$'\n'}
 	line=$line[1,$#line-1]
@@ -44,7 +44,7 @@ test__async_job_wait_for_token() {
 	float start duration
 	coproc cat
 
-	_async_job print hi >/dev/null &
+	_async_job print hi >/dev/null 3>&p 4<&p &
 	job=$!
 	start=$EPOCHREALTIME
 	{
@@ -67,7 +67,7 @@ test__async_job_multiple_commands() {
 
 	local line
 	local -a out
-	line="$(_async_job 0 print '-n hi; for i in "1 2" 3 4; do print -n $i; done')"
+	line="$(_async_job 0 print '-n hi; for i in "1 2" 3 4; do print -n $i; done')" 3>&p 4<&p
 	# Remove trailing null, parse, unquote and interpret as array.
 	line=${${line//$'\r'}//$'\n'}
 	line=$line[1,$#line-1]

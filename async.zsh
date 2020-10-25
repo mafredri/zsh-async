@@ -337,7 +337,7 @@ _async_worker() {
 			fi
 
 			if (( do_eval )); then
-				_async_eval $cmd
+				_async_eval $cmd 3>&p 4<&p
 			else
 				# Run job in background, completed jobs are printed to stdout.
 				_async_job $parent_pid $cmd 3>&p 4<&p &
