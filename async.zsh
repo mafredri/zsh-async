@@ -597,7 +597,19 @@ async_register_callback() {
 # 	async_unregister_callback <worker_name>
 #
 async_unregister_callback() {
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+
 	typeset -gA ASYNC_CALLBACKS
+
+	if [[ -o interactive ]] && [[ -o zle ]] && [[ -n $ASYNC_CALLBACKS[$1] ]]; then
+		# Find and unregister the zle handler for the worker
+		for k v in ${(@kv)ASYNC_PTYS}; do
+			if [[ $v == $worker ]]; then
+				zle -F $k
+				unset "ASYNC_PTYS[$k]"
+			fi
+		done
+	fi
 
 	unset "ASYNC_CALLBACKS[$1]"
 }
@@ -735,13 +747,6 @@ async_stop_worker() {
 
 	local ret=0 worker k v
 	for worker in $@; do
-		# Find and unregister the zle handler for the worker
-		for k v in ${(@kv)ASYNC_PTYS}; do
-			if [[ $v == $worker ]]; then
-				zle -F $k 2>/dev/null
-				unset "ASYNC_PTYS[$k]"
-			fi
-		done
 		async_unregister_callback $worker
 		zpty -d $worker 2>/dev/null || ret=$?
 
