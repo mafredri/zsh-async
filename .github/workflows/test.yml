@@ -53,8 +53,10 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 1
+        env:
+          PROMPT4: "%F{yellow}%e%f %F{blue}%x%f%F{242}:%I%f %F{242}@%f%F{blue}%N%f%F{242}:%i%f%F{242}>%f "
+          PATH: "/opt/zsh/bin:${{env.PATH}}"
         run: |
-          export PATH="/opt/zsh/bin:$PATH"
           zsh --version
           script -qec 'zsh -if ./test.zsh -v -x -run test_async_worker_survives_termination_of_other_worker' /dev/null
           script -qec 'zsh -if ./test.zsh -v' /dev/null
