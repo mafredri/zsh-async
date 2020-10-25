@@ -56,4 +56,5 @@ jobs:
         run: |
           export PATH="/opt/zsh/bin:$PATH"
           zsh --version
+          script -qec 'zsh -if ./test.zsh -v -x -run test_async_worker_survives_termination_of_other_worker' /dev/null
           script -qec 'zsh -if ./test.zsh -v' /dev/null
