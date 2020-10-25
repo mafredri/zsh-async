@@ -435,8 +435,15 @@ test_async_worker_survives_termination_of_other_worker() {
 	local -a result
 	cb() { result+=("$@") }
 
+	t_timeout 2
+
 	async_start_worker test1
 	t_defer async_stop_worker test1
+
+	if ! is-at-least 5.4.1; then
+		# Wait long enough for worker to initialize the HUP trap.
+		sleep 0.01
+	fi
 
 	# Start and stop a worker, will send SIGHUP to previous worker
 	# (probably has to do with some shell inheritance).
@@ -445,9 +452,8 @@ test_async_worker_survives_termination_of_other_worker() {
 
 	async_job test1 print hi
 
-	integer start=$EPOCHREALTIME
-	while (( EPOCHREALTIME - start < 2.0 )); do
-		async_process_results test1 cb && break
+	while ! async_process_results test1 cb; do
+		sleep 0.001
 	done
 
 	(( $#result == 6 )) || t_error "wanted a result, got (${(@Vq)result})"
