@@ -44,8 +44,6 @@ _async_job() {
 	# Store start time for job.
 	float -F duration=$EPOCHREALTIME
 
-	zmodload zsh/system
-
 	# Parent pid for notifications via kill signal.
 	local parent_pid=$1; shift
 
@@ -80,7 +78,7 @@ _async_job() {
 	#read -r -k 1 -p tok || return 1
 
 	# Chunk up the output so as to not fill up the entire fd.
-	integer i c
+	integer i count
 	for ((i = 1; i < $#out; i=i)); do
 	# # for ((i = 1; i < $#out; i += ASYNC_MAX_BUFFER_SIZE)); do
 		# Note: We are surrounding the message in newlines here in an
@@ -89,16 +87,17 @@ _async_job() {
 		# output will survive, as they are quoted.
 		#
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-		syswrite -c c $'\n'${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}$'\n'
+		local message=$'\n'${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}$'\n'
+		syswrite -c count - $message
 		ret=$?
-		print -u2 $ret
-		if ((c == ASYNC_MAX_BUFFER_SIZE)); then
-			((c -= 2))
-		elif ((c)); then
-			((c--))
+		# print -u2 $ret
+		if ((count == $#message)); then
+			((count -= 2))
+		elif ((count)); then
+			((count--))
 		fi
-		((i += c))
-		print -u2 $i
+		((i += count))
+		# print -u2 $i
 		# if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
 		# 	# BUG(mafredri): The worker and parent process should be informed.
 		# 	break
@@ -107,22 +106,21 @@ _async_job() {
 		# When notifications are enabled, inform the parent that the
 		# buffer is filling up and must be consumed.
 		if ((parent_pid)); then
-			# On older version of zsh (pre 5.2) we notify the parent through a
-			# SIGWINCH signal because `zpty` did not return a file descriptor (fd)
-			# prior to that.
-			if (( parent_pid )); then
-				# We use SIGWINCH for compatibility with older versions of zsh
-				# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
-				# cause a deadlock in the shell under certain circumstances.
-				kill -WINCH $parent_pid
-			fi
+			# We use SIGWINCH for compatibility with older versions of zsh
+			# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
+			# cause a deadlock in the shell under certain circumstances.
+			kill -WINCH $parent_pid
+		fi
+
+		if ((ret)); then
+			sleep 0.0001
 		fi
 	done
 
 	# Unlock mutex by inserting a token.
 	# print -n -p $tok
 	syswrite -o 3 $tok
-	print -u2 $?
+	# print -u2 $?
 }
 
 # The background worker manages all tasks and runs them without interfering with other processes
@@ -242,11 +240,11 @@ _async_worker() {
 	}
 
 	local i c buf reply null=$'\0' request reqstart job do_eval=0 script=0
-	local -a cmd
+	local -a cmd args
 	while :; do
 		# Wait for jobs sent by async_job.
 		#read -r -d $'\0' request || {
-		sysread -c c reply || {
+		sysread $args -c c reply || {
 			local ret=$?
 			# Unknown error occurred while reading from stdin, the zpty
 			# worker is likely in a broken state, so we shut down.
@@ -261,17 +259,23 @@ _async_worker() {
 			# result, high CPU utilization.
 			return $(( 127 + 1 ))
 		}
-		print -u2 $c
+		args=()
+
 		while :; do
-			i=${reply[(i)$null$null]}
-			if ((! i)) || ((i >= $#reply)); then
-				buf+=$reply
-				reply=
+			buf=$buf$reply
+			reply=
+
+			# while (($#jobstates > 40)); do
+			# 	args=(-t 0)
+			# 	continue 2
+			# done
+
+			i=${buf[(i)$null$null]}
+			if ((! i)) || ((i >= $#buf - 1)); then
 				continue 2
 			fi
-			request="${buf}${reply[1,$((i - 1))]}"
-			buf=
-			reply="${reply[$((i + 2)), -1]}"
+			request=${buf[1,$((i - 1))]}
+			buf=${buf[$((i + 2)), -1]}
 
 			reqstart=${request[(I)$null]}
 			if ((!reqstart)); then
@@ -467,7 +471,7 @@ _async_zle_watcher() {
 }
 
 _async_send_job() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit noerrexit
 
 	local caller=$1
 	local worker=$2
@@ -491,15 +495,25 @@ _async_send_job() {
 	typeset -gA ASYNC_PTYS
 
 	local index=${${(v)ASYNC_PTYS}[(i)$worker]}
-	syswrite -o ${${(k)ASYNC_PTYS}[$index]} - $'\n\0'"$*"
+	local pty=${${(k)ASYNC_PTYS}[$index]}
+
+	integer count
+	local request=$'\n\0'"$*"$'\0\0\n'
+	syswrite -c count -o $pty - $request
 	ret=$?
-	if ((!ret)); then
-		syswrite -o ${${(k)ASYNC_PTYS}[$index]} - $'\0\0\n'
-		ret=$?
-	else
-		typeset -p ERRNO
-		print -u 2 "_async_send_job: write error: $ret ${ERRNO}"
+	if ((ret)); then
+		sleep 0.1
+		if ((count >= $#request - 1)); then
+			# We managed to write both NULLs so the job will
+			# most likely be accepted and processed.
+			ret=0
+			syswrite -c count -o $pty - $'\n'
+		fi
 	fi
+	if ((ret)); then
+		print -u2 "$caller: write error: $ret ${ERRNO}"
+	fi
+
 	return $ret
 }
 
@@ -513,7 +527,7 @@ _async_send_job() {
 # 	-s interpret the argument as a script
 #
 async_job() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local worker=$1; shift
 
@@ -538,7 +552,7 @@ async_job() {
 # 	-s interpret the argument as a script
 #
 async_worker_eval() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
 
 	local worker=$1; shift
 
@@ -597,21 +611,22 @@ async_register_callback() {
 # 	async_unregister_callback <worker_name>
 #
 async_unregister_callback() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions unset noshwordsplit noksharrays noposixidentifiers noposixstrings errexit
 
 	typeset -gA ASYNC_CALLBACKS
 
-	if [[ -o interactive ]] && [[ -o zle ]] && [[ -n $ASYNC_CALLBACKS[$1] ]]; then
-		# Find and unregister the zle handler for the worker
-		for k v in ${(@kv)ASYNC_PTYS}; do
-			if [[ $v == $worker ]]; then
-				zle -F $k
-				unset "ASYNC_PTYS[$k]"
-			fi
-		done
-	fi
+	if [[ -n $ASYNC_CALLBACKS[$1] ]]; then
+		if [[ -o interactive ]] && [[ -o zle ]]; then
+			# Find and unregister the zle handler for the worker
+			for k v in ${(@kv)ASYNC_PTYS}; do
+				if [[ $v == $worker ]]; then
+					zle -F $k
+				fi
+			done
+		fi
 
-	unset "ASYNC_CALLBACKS[$1]"
+		unset "ASYNC_CALLBACKS[$1]"
+	fi
 }
 
 #
@@ -622,7 +637,7 @@ async_unregister_callback() {
 # 	async_flush_jobs <worker_name>
 #
 async_flush_jobs() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
+	setopt localoptions unset noshwordsplit noksharrays noposixidentifiers noposixstrings errexit
 
 	local worker=$1; shift
 
@@ -660,7 +675,7 @@ async_flush_jobs() {
 # 	-p pid to notify (defaults to current pid)
 #
 async_start_worker() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit noclobber
+	setopt localoptions unset noshwordsplit noksharrays noposixidentifiers noposixstrings errexit noclobber
 
 	local worker=$1; shift
 	local -a args
@@ -743,7 +758,7 @@ async_start_worker() {
 # 	async_stop_worker <worker_name_1> [<worker_name_2>]
 #
 async_stop_worker() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
+	setopt localoptions unset noshwordsplit noksharrays noposixidentifiers noposixstrings noerrexit
 
 	local ret=0 worker k v
 	for worker in $@; do
@@ -751,8 +766,15 @@ async_stop_worker() {
 		zpty -d $worker 2>/dev/null || ret=$?
 
 		# Clear any partial buffers.
-		typeset -gA ASYNC_PROCESS_BUFFER
+		typeset -gA ASYNC_PROCESS_BUFFER ASYNC_PTYS
 		unset "ASYNC_PROCESS_BUFFER[$worker]"
+
+		# TODO(mafredri): Make this nicer.
+		local index=${${(v)ASYNC_PTYS}[(I)$worker]}
+		if ((index)); then
+			local pty=${${(k)ASYNC_PTYS}[$index]}
+			unset "ASYNC_PTYS[$pty]"
+		fi
 	done
 
 	return $ret

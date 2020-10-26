@@ -131,20 +131,21 @@ test_async_process_results() {
 	(( $#r == 6 )) || t_error "want one result, got $(( $#r % 6 ))"
 }
 
-test_async_process_results_stress() {
+test_async_process_results_stress_quick() {
 	# NOTE: This stress test does not always pass properly on older versions of
 	# zsh, sometimes writing to zpty can hang and other times reading can hang,
 	# etc.
 	local -a r
 	cb() { r+=("$@") }
 
-	async_start_worker test
+	async_start_worker test -n
 	t_defer async_stop_worker test
 
-	integer iter=200 timeout=15
+	async_register_callback test cb
+
+	integer iter=1000 timeout=15
 	for i in {1..$iter}; do
 		async_job test -s "print -n $i" || {
-			sleep 0.1
 			print retying $i...
 			async_job test -s "print -n $i"
 		}
@@ -153,7 +154,7 @@ test_async_process_results_stress() {
 	float start=$EPOCHSECONDS
 
 	while (( $#r / 6 < iter )); do
-		async_process_results test cb
+		# async_process_results test cb
 		(( EPOCHSECONDS - start > timeout )) && {
 			t_log "timed out after ${timeout}s"
 			t_fatal "wanted $iter results, got $(( $#r / 6 ))"
@@ -174,24 +175,37 @@ test_async_process_results_stress() {
 	# Check that we received all numbers.
 	got=(${(on)stdouts})
 	want=({1..$iter})
-	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}"
+	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}\n\t$(diff -U 1 <(print ${(F)want}) <(print ${(F)got}))"
+}
+
+test_async_process_results_stress_sleep() {
+	local -a r
+	cb() { r+=("$@") }
+
+	async_start_worker test -n
+	t_defer async_stop_worker test
+
+	async_register_callback test cb
 
 	# Test with longer running commands (sleep, then print).
-	iter=200
+	integer iter=1000 timeout=15
 	for i in {1..$iter}; do
-		async_job test -s "sleep 1 && print -n $i"
-		sleep 0.00001
-		(( iter % 6 == 0 )) && async_process_results test cb
+		async_job test -s "sleep 1 && print -n $i" || {
+			print retying $i...
+			async_job test -s "sleep 1 && print -n $i"
+		}
+		# (( iter % 6 == 0 )) && async_process_results test cb
 	done
 
 	start=$EPOCHSECONDS
 
 	while (( $#r / 6 < iter )); do
-		async_process_results test cb
+		# async_process_results test cb
 		(( EPOCHSECONDS - start > timeout )) && {
 			t_log "timed out after ${timeout}s"
 			t_fatal "wanted $iter results, got $(( $#r / 6 ))"
 		}
+		sleep 0.01
 	done
 
 	stdouts=()
@@ -206,7 +220,7 @@ test_async_process_results_stress() {
 	# Check that we received all numbers.
 	got=(${(on)stdouts})
 	want=({1..$iter})
-	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}"
+	[[ $want = $got ]] || t_error "want stdout: ${(Vq-)want}, got ${(Vq-)got}\n\t$(diff -U 1 <(print ${(F)want}) <(print ${(F)got}))"
 }
 
 test_async_job_multiple_commands_in_multiline_string() {
@@ -525,10 +539,15 @@ setopt_helper() {
 	local -a result
 	cb() { result=("$@") }
 
-	async_start_worker setopt_helper
-	async_job setopt_helper print "$1"
-	while ! async_process_results setopt_helper cb; do sleep 0.001; done
-	async_stop_worker setopt_helper
+	async_start_worker setopt_helper || t_error "$1 async_start_worker failed $?"
+	async_job setopt_helper print "$1" || t_error "$1 async_job failed $?"
+	async_job setopt_helper print "$1" || t_error "$1 async_job failed $?"
+
+	while ! async_process_results setopt_helper cb; do
+		sleep 0.001
+	done
+
+	async_stop_worker setopt_helper || t_error "$1 async_stop_worker failed $?"
 
 	# At this point, ksh arrays will only mess with the test.
 	setopt noksharrays
@@ -563,6 +582,7 @@ test_all_options() {
 	)
 
 	for opt in ${opts:|exclude}; do
+		# print setopt $opt
 		if [[ $options[$opt] = on ]]; then
 			setopt_helper no$opt
 		else
