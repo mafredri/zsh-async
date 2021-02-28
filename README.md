@@ -62,7 +62,7 @@ Simply stops a worker and all active jobs will be terminated immediately.
 
 #### `async_job <worker_name> <my_function> [<function_params>]`
 
-Start a new asynchronous job on specified worker, assumes the worker is running. Note if you are using a function for the job, it must have been defined when the worker was started or you will get a `command not found` error.
+Start a new asynchronous job on specified worker, assumes the worker is running. Note if you are using a function for the job, it must have been defined before the worker was started or you will get a `command not found` error.
 
 #### `async_worker_eval <worker_name> <my_function> [<function_params>]`
 
