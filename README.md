@@ -20,7 +20,7 @@ This library bridges the gap between spawning child processes and disowning them
 
 The async worker is a separate environment (think web worker). You send it a job (command + parameters) to execute and it returns the result of that execution through a callback function. If you find that you need to stop/start a worker to update global state (variables) you should consider refactoring so that state is passed during the `async_job` call (e.g. `async_job my_worker my_function $state1 $state2`).
 
-Note that because the worker is a separate forked environment, any functions you want to use as jobs in the worker need to be defined when the worker is created, otherwise you will get a `command not found` error when you try to launch the job.
+Note that because the worker is a separate forked environment, any functions you want to use as jobs in the worker need to be defined before the worker is started, otherwise you will get a `command not found` error when you try to launch the job.
 
 ### Installation
 
