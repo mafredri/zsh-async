@@ -392,6 +392,9 @@ _async_send_job() {
 #
 # Start a new asynchronous job on specified worker, assumes the worker is running.
 #
+# Note if you are using a function for the job, it must have been defined before the worker was
+# started or you will get a `command not found` error.
+#
 # usage:
 # 	async_job <worker_name> <my_function> [<function_params>]
 #
