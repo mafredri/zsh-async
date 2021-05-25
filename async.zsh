@@ -11,6 +11,12 @@
 typeset -g ASYNC_VERSION=1.8.5
 # Produce debug output from zsh-async when set to 1.
 typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
+# When ASYNC_DEBUG=1, worker stderr output will be redirected here.
+typeset -g ASYNC_DEBUG_WORKER_STDERR=${ASYNC_DEBUG_WORKER_STDERR:-/dev/null}
+
+# The maximum buffer size when outputing to zpty.
+# Note: Subtract 4 to accomodate "\r\n" times two.
+typeset -g ASYNC_MAX_BUFFER_SIZE=$((1024 - 4))
 
 # Execute commands that can manipulate the environment inside the async worker. Return output via callback.
 _async_eval() {
@@ -20,16 +26,16 @@ _async_eval() {
 	# simplicity, this could be improved in the future.
 	{
 		eval "$@"
-	} &> >(ASYNC_JOB_NAME=[async/eval] _async_job 'command -p cat')
+	} &> >(ASYNC_JOB_NAME=[async/eval] _async_job 0 'command -p cat')
 }
 
 # Wrapper for jobs executed by the async worker, gives output in parseable format with execution time
 _async_job() {
-	# Disable xtrace as it would mangle the output.
-	setopt localoptions noxtrace
-
 	# Store start time for job.
 	float -F duration=$EPOCHREALTIME
+
+	# Parent pid for notifications via kill signal.
+	local parent_pid=$1; shift
 
 	# Run the command and capture both stdout (`eval`) and stderr (`cat`) in
 	# separate subshells. When the command is complete, we grab write lock
@@ -40,6 +46,10 @@ _async_job() {
 	local jobname=${ASYNC_JOB_NAME:-$1} out
 	out="$(
 		local stdout stderr ret tok
+
+		# Disable xtrace as it would mangle the stderr. The user can
+		# still enable xtrace inside the async job, if required.
+		setopt noxtrace
 		{
 			stdout=$(eval "$@")
 			ret=$?
@@ -56,8 +66,33 @@ _async_job() {
 	# Grab mutex lock, stalls until token is available.
 	read -r -k 1 -p tok || return 1
 
-	# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
-	print -r -n - "$out"
+	# Chunk up the output so as to not fill up the entire fd.
+	for ((i = 1; i < $#out; i += ASYNC_MAX_BUFFER_SIZE)); do
+		# Note: We are surrounding the message in newlines here in an
+		# attempt to force zpty to behave. Literal newlines will be
+		# filtered by async_process_results. Any newlines in the job
+		# output will survive, as they are quoted.
+		#
+		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
+		if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
+			# BUG(mafredri): The worker and parent process should be informed.
+			break
+		fi
+
+		# When notifications are enabled, inform the parent that the
+		# buffer is filling up and must be consumed.
+		if ((parent_pid)); then
+			# On older version of zsh (pre 5.2) we notify the parent through a
+			# SIGWINCH signal because `zpty` did not return a file descriptor (fd)
+			# prior to that.
+			if (( parent_pid )); then
+				# We use SIGWINCH for compatibility with older versions of zsh
+				# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
+				# cause a deadlock in the shell under certain circumstances.
+				kill -WINCH $parent_pid
+			fi
+		fi
+	done
 
 	# Unlock mutex by inserting a token.
 	print -n -p $tok
@@ -76,7 +111,14 @@ _async_worker() {
 	# worker. For example: `fork failed: resource temporarily unavailable`.
 	# Some older versions of zsh might also print malloc errors (know to happen
 	# on at least zsh 5.0.2 and 5.0.8) likely due to kill signals.
-	exec 2>/dev/null
+	if ((ASYNC_DEBUG)); then
+		exec 2>>${ASYNC_DEBUG_WORKER_STDERR}
+		if [[ $ASYNC_DEBUG_WORKER_STDERR != /dev/null ]]; then
+			setopt xtrace
+		fi
+	else
+		exec 2>/dev/null
+	fi
 
 	# When a zpty is deleted (using -d) all the zpty instances created before
 	# the one being deleted receive a SIGHUP, unless we catch it, the async
@@ -115,22 +157,8 @@ _async_worker() {
 		fi
 	}
 
-	child_exit() {
-		close_idle_coproc
-
-		# On older version of zsh (pre 5.2) we notify the parent through a
-		# SIGWINCH signal because `zpty` did not return a file descriptor (fd)
-		# prior to that.
-		if (( notify_parent )); then
-			# We use SIGWINCH for compatibility with older versions of zsh
-			# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
-			# cause a deadlock in the shell under certain circumstances.
-			kill -WINCH $parent_pid
-		fi
-	}
-
 	# Register a SIGCHLD trap to handle the completion of child processes.
-	trap child_exit CHLD
+	trap close_idle_coproc CHLD
 
 	# Process option parameters passed to worker.
 	while getopts "np:uz" opt; do
@@ -141,6 +169,9 @@ _async_worker() {
 			z) notify_parent=0;;  # Uses ZLE watcher instead.
 		esac
 	done
+	if ((!notify_parent)) {
+		parent_pid=0
+	}
 
 	# Terminate all running jobs, note that this function does not
 	# reinstall the child trap.
@@ -173,10 +204,10 @@ _async_worker() {
 		(( coproc_pid )) && read -r -k 1 -p tok
 
 		terminate_jobs
-		trap child_exit CHLD  # Reinstall child trap.
+		trap close_idle_coproc CHLD  # Reinstall child trap.
 	}
 
-	local request do_eval=0
+	local request job do_eval=0
 	local -a cmd
 	while :; do
 		# Wait for jobs sent by async_job.
@@ -211,7 +242,7 @@ _async_worker() {
 		cmd=("${(z)request}")
 
 		# Name of the job (first argument).
-		local job=$cmd[1]
+		job=$cmd[1]
 
 		# Check if a worker should perform unique jobs, unless
 		# this is an eval since they run synchronously.
@@ -243,7 +274,7 @@ _async_worker() {
 			_async_eval $cmd
 		else
 			# Run job in background, completed jobs are printed to stdout.
-			_async_job $cmd &
+			_async_job $parent_pid $cmd &
 			# Store pid because zsh job manager is extremely unflexible (show jobname as non-unique '$job')...
 			storage[$job]="$!"
 		fi
@@ -292,7 +323,8 @@ async_process_results() {
 
 	# Read output from zpty and parse it if available.
 	while zpty -r -t $worker data 2>/dev/null; do
-		ASYNC_PROCESS_BUFFER[$worker]+=$data
+		# Trim newlines that are not part of the data.
+		ASYNC_PROCESS_BUFFER[$worker]+=${${data//$'\r'/}//$'\n'/}
 		len=${#ASYNC_PROCESS_BUFFER[$worker]}
 		pos=${ASYNC_PROCESS_BUFFER[$worker][(i)$null]}  # Get index of NULL-character (delimiter).
 
