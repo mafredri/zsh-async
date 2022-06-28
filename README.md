@@ -36,6 +36,14 @@ You can either source the `async.zsh` script directly or insert under your `$fpa
 zplug "mafredri/zsh-async", from:"github", use:"async.zsh"
 ```
 
+### Fig
+
+[Fig](https://fig.io) adds apps, shortcuts, and autocomplete to your existing terminal.
+
+Install `zsh-async` in just one click.
+
+<a href="https://fig.io/plugins/other/zsh-async_mafredri" target="_blank"><img src="https://fig.io/badges/install-with-fig.svg" /></a>
+
 ### Functions
 
 The `zsh-async` library has a bunch of functions that need to be used to perform async actions:
