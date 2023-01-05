@@ -1,18 +1,39 @@
 name: Test
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
 jobs:
-  test:
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run tests
+        timeout-minutes: 1
+        run: |
+          zsh --version
+          script -qec 'zsh -if ./test.zsh -v' /dev/null
+
+  ubuntu:
+    name: Ubuntu
     strategy:
       matrix:
         os: [ubuntu-latest]
         zsh-version:
+          - "5.9"
+          - "5.8.1"
           - "5.8"
           - "5.7.1"
           - "5.7"
           - "5.6.2"
           - "5.5.1"
           - "5.4.2"
-          # Too old to build on GitHub Actions (missing signals).
+          # Too old to build/use on GitHub Actions (missing signals).
           # - "5.3.1"
           # - "5.3"
           # - "5.2"
