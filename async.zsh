@@ -83,14 +83,11 @@ _async_job() {
 		# buffer is filling up and must be consumed.
 		if ((parent_pid)); then
 			# On older version of zsh (pre 5.2) we notify the parent through a
-			# SIGWINCH signal because `zpty` did not return a file descriptor (fd)
-			# prior to that.
-			if (( parent_pid )); then
-				# We use SIGWINCH for compatibility with older versions of zsh
-				# (pre 5.1.1) where other signals (INFO, ALRM, USR1, etc.) could
-				# cause a deadlock in the shell under certain circumstances.
-				kill -WINCH $parent_pid
-			fi
+			# SIGWINCH signal because `zpty` did not return a file descriptor
+			# (fd) prior to that. We use SIGWINCH for because other signals
+			# (INFO, ALRM, USR1, etc.) can cause a deadlock in some situations.
+			# (The deadlock was fixed in zsh 5.1.1.)
+			kill -WINCH $parent_pid
 		fi
 	done
 
