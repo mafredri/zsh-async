@@ -140,6 +140,9 @@ run_test_module() {
 	local -a tests
 	float start module_time
 
+	# Reset trap handlers from parent.
+	trap - EXIT INT
+
 	# Create fd's for communication with test runner.
 	integer run_pid cmdoutfd cmdinfd outfd infd doneoutfd doneinfd
 
@@ -219,7 +222,7 @@ run_test_module() {
 	mod_time=$(( EPOCHREALTIME - mod_start ))
 
 	# Perform cleanup.
-	kill -HUP $run_pid
+	kill -INT $run_pid
 	exec {outfd}>&-
 	exec {infd}<&-
 	exec {cmdinfd}>&-
@@ -240,13 +243,13 @@ run_test_module() {
 }
 
 cleanup() {
-	trap '' HUP
-	kill -HUP -$$ 2>/dev/null
-	trap - HUP
-	kill -HUP $$ 2>/dev/null
+	trap - EXIT
+	trap '' INT
+	kill -INT -$$ 2>/dev/null
 }
 
-trap cleanup EXIT INT HUP QUIT TERM USR1
+trap 'cleanup' EXIT
+trap 'cleanup; exit 1' INT
 
 # Parse command arguments.
 parse_opts $@
@@ -261,7 +264,4 @@ for tf in ${~TEST_GLOB}/*_test.(zsh|sh); do
 	(( $? )) && failed=1
 done
 
-trap - EXIT
-trap '' HUP
-kill -HUP -$$ 2>/dev/null
 exit $failed
