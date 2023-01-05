@@ -12,13 +12,14 @@ zmodload zsh/zutil
 zmodload zsh/system
 zmodload zsh/zselect
 
-TEST_GLOB=.
-TEST_RUN=
-TEST_VERBOSE=0
-TEST_TRACE=1
-TEST_CODE_SKIP=100
-TEST_CODE_ERROR=101
-TEST_CODE_TIMEOUT=102
+export ZTEST_DEBUG=0
+export TEST_GLOB=.
+export TEST_RUN=
+export TEST_VERBOSE=0
+export TEST_TRACE=0
+export TEST_CODE_SKIP=100
+export TEST_CODE_ERROR=101
+export TEST_CODE_TIMEOUT=102
 
 show_help() {
 	print "usage: ./test.zsh [-v] [-x] [-run pattern] [search pattern]"
@@ -60,7 +61,18 @@ t_runner_init() {
 	# used to abort test execution by exec.
 	_t_runner() {
 		local -a _test_defer_funcs
-		integer _test_errors=0
+		local _test_timeout_trace _test_timeout=0
+		integer _test_errors=0 _test_timeout_pid=0
+
+		TRAPALRM() {
+			if ((_test_timeout)); then
+				_test_timeout_pid=0
+				_t_log $_test_timeout_trace "timed out after ${_test_timeout}s"
+				() { return $TEST_CODE_TIMEOUT }
+				t_done
+			fi
+			return 0
+		}
 		while read -r; do
 			eval "$REPLY"
 		done
@@ -76,6 +88,7 @@ t_runner_init() {
 
 	# t_log is for printing log output, visible in verbose (-v) mode.
 	t_log() {
+		setopt localoptions noposixidentifiers
 		local line=$funcfiletrace[1]
 		[[ ${line%:[0-9]*} = "" ]] && line=ztest:$functrace[1]  # Not from a file.
 		_t_log $line "$*"
@@ -83,22 +96,33 @@ t_runner_init() {
 
 	# t_skip is for skipping a test.
 	t_skip() {
+		setopt localoptions noposixidentifiers
 		_t_log $funcfiletrace[1] "$*"
-		() { return 100 }
+		() { return $TEST_CODE_SKIP }
 		t_done
 	}
 
 	# t_error logs the error and fails the test without aborting.
 	t_error() {
+		setopt localoptions noposixidentifiers
 		(( _test_errors++ ))
 		_t_log $funcfiletrace[1] "$*"
 	}
 
 	# t_fatal fails the test and halts execution immediately.
 	t_fatal() {
+		setopt localoptions noposixidentifiers
 		_t_log $funcfiletrace[1] "$*"
-		() { return 101 }
+		() { return $TEST_CODE_ERROR }
 		t_done
+	}
+
+	t_timeout() {
+		setopt localoptions noposixidentifiers
+		_test_timeout_trace=$funcfiletrace[1]
+		_test_timeout=$1
+		{ sleep $_test_timeout && kill -ALRM $$ } &
+		_test_timeout_pid=$!
 	}
 
 	# t_defer takes a function (and optionally, arguments)
@@ -111,7 +135,8 @@ t_runner_init() {
 	# Can also be called manually when the test is done.
 	t_done() {
 		local ret=$? w=${1:-1}
-		(( _test_errors )) && ret=101
+		(( ret < 100 && _test_errors )) && ret=101
+		(( _test_timeout_pid )) && kill $_test_timeout_pid
 
 		(( w )) && wait    # Wait for test children to exit.
 		for d in $_test_defer_funcs; do
@@ -204,8 +229,8 @@ run_test_module() {
 
 		case $test_exit in
 			(0|1) state=PASS;;
-			(100) state=SKIP;;
-			(101|102) state=FAIL; mod_exit=1;;
+			($TEST_CODE_SKIP) state=SKIP;;
+			($TEST_CODE_ERROR|$TEST_CODE_TIMEOUT) state=FAIL; mod_exit=1;;
 			*) state="????";;
 		esac
 

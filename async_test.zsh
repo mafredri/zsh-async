@@ -257,16 +257,18 @@ test_async_job_unique_worker() {
 	helper() {
 		sleep 0.1; print $1
 	}
+	t_timeout 2
 
 	# Start a unique (job) worker.
 	async_start_worker test -u
+	t_defer async_stop_worker test
 
 	# Launch two jobs with the same name, the first one should be
 	# allowed to complete whereas the second one is never run.
 	async_job test helper one
 	async_job test helper two
 
-	while ! async_process_results test cb; do :; done
+	while ! async_process_results test cb; do sleep 0.05; done
 
 	# If both jobs were running but only one was complete,
 	# async_process_results() could've returned true for
@@ -274,8 +276,6 @@ test_async_job_unique_worker() {
 	# other didn't run.
 	sleep 0.1
 	async_process_results test cb
-
-	async_stop_worker test
 
 	# Ensure that cb was only called once with correc output.
 	[[ ${#result} = 6 ]] || t_error "result: want 6 elements, got" ${#result}
@@ -297,6 +297,8 @@ test_async_job_error_and_nonzero_exit() {
 	async_job test error
 
 	while ! async_process_results test cb; do :; done
+
+	async_stop_worker test
 
 	[[ $r[1] = error ]] || t_error "want 'error', got ${(Vq-)r[1]}"
 	[[ $r[2] = 99 ]] || t_error "want exit code 99, got $r[2]"
@@ -365,6 +367,7 @@ test_async_flush_jobs() {
 	}
 
 	async_start_worker test
+	t_defer async_stop_worker test
 
 	# Start a job that prints 1 and starts two disowned child processes that
 	# print 2 and 3, respectively, after a timeout. The job will not exit
@@ -384,8 +387,10 @@ test_async_flush_jobs() {
 
 	# Flush jobs, this kills running jobs and discards unprocessed results.
 	# TODO: Confirm that they no longer exist in the process tree.
-	local output
-	output="${(Q)$(ASYNC_DEBUG=1 async_flush_jobs test)}"
+	local output line
+	ASYNC_DEBUG=1 async_flush_jobs test | while read -r line; do output+="$line"; done
+	output="${(Q)output}"
+
 	# NOTE(mafredri): First 'p' in print_four is lost when null-prefixing
 	# _async_job output.
 	[[ $output = *'rint_four 0 4'* ]] || {
@@ -396,8 +401,6 @@ test_async_flush_jobs() {
 	sleep 0.1
 	async_process_results test cb
 	(( $#r == 0 )) || t_error "want no output, got ${(Vq-)r}"
-
-	async_stop_worker test
 }
 
 test_async_worker_survives_termination_of_other_worker() {
@@ -488,15 +491,17 @@ setopt_helper() {
 	local -a result
 	cb() { result=("$@") }
 
-	async_start_worker test
-	async_job test print "hello world"
-	while ! async_process_results test cb; do :; done
-	async_stop_worker test
+	async_start_worker ${1}_worker
+	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
+	async_job ${1}_worker print "hello world"
+	while ! async_process_results ${1}_worker cb; do sleep 0.001; done
+	#sleep 0.001  # Fails sporadically on GitHub Actions without a sleep here.
+	async_stop_worker ${1}_worker
 
 	# At this point, ksh arrays will only mess with the test.
 	setopt noksharrays
 
-	[[ $result[1] = print ]] || t_fatal "$1 want command name: print, got" $result[1]
+	[[ $result[1] = print ]] || t_fatal "$1 want command name: print, got" $result[1] "(${(Vq-)result})"
 	[[ $result[2] = 0 ]] || t_fatal "$1 want exit code: 0, got" $result[2]
 
 	[[ $result[3] = "hello world" ]] || {
@@ -511,12 +516,12 @@ test_all_options() {
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
+	t_timeout 30
+
 	# Make sure worker is stopped, even if tests fail.
-	t_defer async_stop_worker test
+	#t_defer async_stop_worker test
 
-	{ sleep 15 && t_fatal "timed out" } &
-	local tpid=$!
-
+	local -a opts exclude
 	opts=(${(k)options})
 
 	# These options can't be tested.
@@ -524,16 +529,23 @@ test_all_options() {
 		zle interactive restricted shinstdin stdin onecmd singlecommand
 		warnnestedvar errreturn
 	)
+	#setopt nopromptsubst
 
-	for opt in ${opts:|exclude}; do
-		if [[ $options[$opt] = on ]]; then
-			setopt_helper no$opt
-		else
-			setopt_helper $opt
-		fi
-	done 2>/dev/null  # Remove redirect to see output.
-
-	kill $tpid  # Stop timeout.
+	local -a testopts=(${opts:|exclude})
+	for ((i = 1; i <= $#testopts; i++)); do
+		t_log "Testing with ${testopts[i]} included..."
+		for opt in $testopts[1,$i]; do
+			if [[ $options[$opt] = on ]]; then
+				setopt_helper no$opt
+			else
+				if [[ $opt = xtrace ]] || [[ $opt = printexitvalue ]]; then
+					setopt_helper $opt 2>/dev/null
+				else
+					setopt_helper $opt
+				fi
+			fi
+		done
+	done
 }
 
 test_async_job_with_rc_expand_param() {
