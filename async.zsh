@@ -14,9 +14,17 @@ typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
 # When ASYNC_DEBUG=1, worker stderr output will be redirected here.
 typeset -g ASYNC_DEBUG_WORKER_STDERR=${ASYNC_DEBUG_WORKER_STDERR:-/dev/null}
 
-# The maximum buffer size when outputing to zpty.
-# Note: Subtract 4 to accomodate "\r\n" times two.
-typeset -g ASYNC_MAX_BUFFER_SIZE=$((1024 - 4))
+# The maximum buffer size when outputting to zpty.
+# Note: Subtract 4 to accommodate "\r\n" times two.
+#
+# When processing large amounts of data, the limit of 1024 bytes is
+# slow. If you're going to output a lot more than that, consider
+# increasing the buffer size.
+#
+# This value was chosen as a safe limit for macOS and other systems that
+# have a low limit (1024) for the buffer, on Linux this can likely be
+# raised significantly.
+typeset -g ASYNC_MAX_BUFFER_SIZE=${ASYNC_MAX_BUFFER_SIZE:-$((1024 - 4))}
 
 # Execute commands that can manipulate the environment inside the async worker. Return output via callback.
 _async_eval() {
@@ -76,6 +84,8 @@ _async_job() {
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
 		if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
 			# BUG(mafredri): The worker and parent process should be informed.
+			# Unlock mutex to prevent a deadlock.
+			print -n -p $tok
 			break
 		fi
 
@@ -104,7 +114,7 @@ _async_worker() {
 	# pids of child processes.
 	unsetopt monitor
 
-	# Redirect stderr to `/dev/null` in case unforseen errors produced by the
+	# Redirect stderr to `/dev/null` in case unforeseen errors produced by the
 	# worker. For example: `fork failed: resource temporarily unavailable`.
 	# Some older versions of zsh might also print malloc errors (know to happen
 	# on at least zsh 5.0.2 and 5.0.8) likely due to kill signals.
