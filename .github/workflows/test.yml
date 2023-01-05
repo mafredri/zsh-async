@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /opt/zsh
-          key: ${{runner.os}}-${{matrix.zsh-version}}-v1
+          key: ${{runner.os}}-${{matrix.zsh-version}}
 
       - name: Checkout zsh
         if: steps.cache-zsh.outputs.cache-hit != 'true'
