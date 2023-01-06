@@ -15,7 +15,6 @@ typeset -g ASYNC_DEBUG=${ASYNC_DEBUG:-0}
 typeset -g ASYNC_DEBUG_WORKER_STDERR=${ASYNC_DEBUG_WORKER_STDERR:-/dev/null}
 
 # The maximum buffer size when outputting to zpty.
-# Note: Subtract 4 to accommodate "\r\n" times two.
 #
 # When processing large amounts of data, the limit of 1024 bytes is
 # slow. If you're going to output a lot more than that, consider
@@ -24,6 +23,8 @@ typeset -g ASYNC_DEBUG_WORKER_STDERR=${ASYNC_DEBUG_WORKER_STDERR:-/dev/null}
 # This value was chosen as a safe limit for macOS and other systems that
 # have a low limit (1024) for the buffer, on Linux this can likely be
 # raised significantly.
+#
+# Note: Subtract 4 to accommodate "\r\n" times two.
 typeset -g ASYNC_MAX_BUFFER_SIZE=${ASYNC_MAX_BUFFER_SIZE:-$((1024 - 4))}
 
 # Execute commands that can manipulate the environment inside the async worker. Return output via callback.
@@ -76,10 +77,11 @@ _async_job() {
 
 	# Chunk up the output so as to not fill up the entire fd.
 	for ((i = 1; i < $#out; i += ASYNC_MAX_BUFFER_SIZE)); do
-		# Note: We are surrounding the message in newlines here in an
-		# attempt to force zpty to behave. Literal newlines will be
-		# filtered by async_process_results. Any newlines in the job
-		# output will survive, as they are quoted.
+		# Note: We are surrounding the (potentially partial) message in newlines
+		# here in an attempt to flush the file descriptor and prevent behavior
+		# that could cause zpty to hang. Literal newlines will be filtered by
+		# async_process_results. Any newlines in the job output will survive, as
+		# they are quoted.
 		#
 		# Return output (<job_name> <return_code> <stdout> <duration> <stderr>).
 		if ! print -r -n - $'\n'"${out[$i,$((i + ASYNC_MAX_BUFFER_SIZE - 1))]}"$'\n'; then
