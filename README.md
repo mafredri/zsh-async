@@ -170,6 +170,7 @@ ok	./async_test.zsh	0.070s
 
 ## Limitations
 
+* Processing a lot of output (>10240 bytes) can be slow due to the default value of `ASYNC_MAX_BUFFER_SIZE` (default `1020`). The low default value is a safety precaution, raising it is unlikely to cause problems on e.g. Linux, but caution is warranted.
 * A NULL-character (`$'\0'`) is used by `async_job` to signify the end of the command, it is recommended not to pass them as arguments, although they should work when passing multiple arguments to `async_job` (because of quoting).
 * Tell me? :)
 

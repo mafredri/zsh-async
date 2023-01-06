@@ -1,13 +1,16 @@
 #!/usr/bin/env zsh
 
+autoload -Uz is-at-least
+
 test__async_job_print_hi() {
 	coproc cat
 	print -n -p t  # Insert token into coproc.
 
 	local line
 	local -a out
-	line=$(_async_job print hi)
+	line=$(_async_job 0 print hi)
 	# Remove leading/trailing null, parse, unquote and interpret as array.
+	line=${${line//$'\r'}//$'\n'}
 	line=$line[2,$#line-1]
 	out=("${(@Q)${(z)line}}")
 
@@ -24,8 +27,9 @@ test__async_job_stderr() {
 
 	local line
 	local -a out
-	line=$(_async_job print 'hi 1>&2')
+	line=$(_async_job 0 print 'hi 1>&2')
 	# Remove trailing null, parse, unquote and interpret as array.
+	line=${${line//$'\r'}//$'\n'}
 	line=$line[1,$#line-1]
 	out=("${(@Q)${(z)line}}")
 
@@ -63,8 +67,9 @@ test__async_job_multiple_commands() {
 
 	local line
 	local -a out
-	line="$(_async_job print '-n hi; for i in "1 2" 3 4; do print -n $i; done')"
+	line="$(_async_job 0 print '-n hi; for i in "1 2" 3 4; do print -n $i; done')"
 	# Remove trailing null, parse, unquote and interpret as array.
+	line=${${line//$'\r'}//$'\n'}
 	line=$line[1,$#line-1]
 	out=("${(@Q)${(z)line}}")
 
@@ -507,7 +512,7 @@ setopt_helper() {
 test_all_options() {
 	local -a opts exclude
 
-	if [[ $ZSH_VERSION == 5.0.? ]]; then
+	if ! is-at-least 5.1; then
 		t_skip "Test is not reliable on zsh 5.0.X"
 	fi
 
@@ -593,7 +598,9 @@ zpty_deinit() {
 }
 
 test_zle_watcher() {
-	t_skip "Test is not reliable on zsh 5.0.X"
+	if ! is-at-least 5.1; then
+		t_skip "Test is not reliable on zsh 5.0.X"
+	fi
 
 	setopt localoptions
 	zpty_init '
@@ -624,6 +631,83 @@ test_zle_watcher() {
 
 	zpty -r -m zsh result "*print 0 'hello world'*" || {
 		t_fatal "want \"print 0 'hello world'\", got output ${(Vq-)result}"
+	}
+}
+
+test_lorem_ipsum_stress() {
+	local -a result
+	cb() { result=("$@") }
+
+	# About 10k characters.
+	local want='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+	local times=80
+
+	async_start_worker test
+	async_job test "out=; for i in {1..$times}; do out+=\$'$want\n'; done; print \"\$out\";"
+	while ! async_process_results test cb; do :; done
+	async_stop_worker test
+
+	[[ $result[1] = 'out=' ]] || t_error "want command name: out=, got" $result[1]
+	[[ $result[2] = 0 ]] || t_error "want exit code: 0, got" $result[2]
+
+	local want_full=$want
+	for i in {2..$times}; do
+		want_full+=$'\n'$want
+	done
+
+	[[ $result[3] = $want_full ]] || {
+		t_error "want output: ${(Vq-)want} * $times, got" ${(Vq-)result[3]}
+	}
+}
+
+test_lorem_ipsum_stress_zle() {
+	if ! is-at-least 5.1; then
+		t_skip "Test is not reliable on zsh 5.0.X"
+	fi
+
+	setopt localoptions
+	zpty_init '
+		emulate -R zsh
+		setopt zle
+		stty 38400 columns 80 rows 24 tabs -icanon -iexten
+		TERM=vt100
+
+		. "'$PWD'/async.zsh"
+		async_init
+
+		print_result_cb() { print $3 }
+		async_start_worker test
+		async_register_callback test print_result_cb
+	' || {
+		zpty_deinit
+		t_fatal "failed to init zpty"
+	}
+
+	t_defer zpty_deinit  # Deinit after test completion.
+
+	# About 10k characters.
+	local want='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+	local times=80
+
+	cmd="out=; for i in {1..$times}; do out+=\$'$want\n'; done; print \"\${out}EOF\""
+	zpty_run async_job test ${(q)cmd} || t_fatal "could not send async_job command"
+
+	zpty -r -m zsh result "*EOF" || {
+		t_fatal "want lorem ipsum followed by \"EOF\", got output ${(Vq-)result}"
+	}
+
+	# Remove terminal codes preceding the output.
+	result=Lorem${result#*Lorem}
+	result=${result//$'\r'/}
+	result=${result%$'\n'EOF}
+
+	local want_full=$want
+	for i in {2..$times}; do
+		want_full+=$'\n'$want
+	done
+
+	[[ $result = $want_full ]] || {
+		t_error "want output: ${(Vq-)want} * $times, got ${(Vq-)result}"
 	}
 }
 
