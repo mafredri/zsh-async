@@ -346,7 +346,7 @@ _async_zle_watcher() {
 	local worker=$ASYNC_PTYS[$1]
 	local callback=$ASYNC_CALLBACKS[$worker]
 
-	if [[ -n $2 ]]; then
+	if [[ -n ${2:-} ]]; then
 		# from man zshzle(1):
 		# `hup' for a disconnect, `nval' for a closed or otherwise
 		# invalid descriptor, or `err' for any other condition.
@@ -645,7 +645,7 @@ async_stop_worker() {
 # 	async_init
 #
 async_init() {
-	(( ASYNC_INIT_DONE )) && return
+	(( ${ASYNC_INIT_DONE:-0} )) && return
 	typeset -g ASYNC_INIT_DONE=1
 
 	zmodload zsh/zpty
