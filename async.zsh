@@ -341,12 +341,12 @@ async_process_results() {
 
 # Watch worker for output
 _async_zle_watcher() {
-	setopt localoptions noshwordsplit
+	setopt localoptions noshwordsplit unset
 	typeset -gA ASYNC_PTYS ASYNC_CALLBACKS
 	local worker=$ASYNC_PTYS[$1]
 	local callback=$ASYNC_CALLBACKS[$worker]
 
-	if [[ -n ${2:-} ]]; then
+	if [[ -n $2 ]]; then
 		# from man zshzle(1):
 		# `hup' for a disconnect, `nval' for a closed or otherwise
 		# invalid descriptor, or `err' for any other condition.
@@ -368,7 +368,7 @@ _async_zle_watcher() {
 }
 
 _async_send_job() {
-	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings
+	setopt localoptions noshwordsplit noksharrays noposixidentifiers noposixstrings unset
 
 	local caller=$1
 	local worker=$2
@@ -645,7 +645,8 @@ async_stop_worker() {
 # 	async_init
 #
 async_init() {
-	(( ${ASYNC_INIT_DONE:-0} )) && return
+    setopt localoptions unset
+	(( $ASYNC_INIT_DONE )) && return
 	typeset -g ASYNC_INIT_DONE=1
 
 	zmodload zsh/zpty
